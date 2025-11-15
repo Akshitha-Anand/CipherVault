@@ -13,6 +13,7 @@ interface UserDashboardProps {
   user: User;
   accountHealth: AccountHealthStats;
   onTransactionComplete: () => void;
+  onVerificationFailure: (transaction: Transaction, capturedImage: string) => void;
   onLogout: () => void;
 }
 
@@ -32,7 +33,7 @@ const riskConfig = {
     [RiskLevel.Critical]: { color: 'red', label: 'Critical Risk', scoreRange: '91-100%' },
 };
 
-const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTransactionComplete, onLogout }) => {
+const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTransactionComplete, onVerificationFailure, onLogout }) => {
   const [processState, setProcessState] = useState<ProcessState>(ProcessState.Idle);
   const [analysisResult, setAnalysisResult] = useState<RiskAnalysisResult | null>(null);
   const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null);
@@ -60,7 +61,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
   }, []);
 
   const handleAnalysis = useCallback(async (currentAmount: string) => {
-    if (!recipient || !currentAmount || parseFloat(currentAmount) <= 0) {
+    if (!recipient || !currentAmount || parseFloat(currentAmount) <= 0 || user.status === 'BLOCKED') {
       setProcessState(ProcessState.Idle);
       setAnalysisResult(null);
       setCurrentTransaction(null);
@@ -72,7 +73,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
     setError(null);
 
     try {
-      // Create a pending transaction object first
       const pendingTransaction: Omit<Transaction, 'id' | 'riskLevel' | 'riskScore' | 'status' | 'aiAnalysisLog'> = {
           userId: user.id,
           userName: user.name,
@@ -134,6 +134,13 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
           await updateTransactionStatus(currentTransaction.id, 'APPROVED');
       }
   }
+  
+  const handleVerificationFailureWrapper = (capturedImage: string) => {
+    if(currentTransaction) {
+      onVerificationFailure(currentTransaction, capturedImage);
+      setProcessState(ProcessState.Blocked);
+    }
+  }
 
   const resetAfterCompletion = () => {
     onTransactionComplete();
@@ -168,6 +175,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
   }, [processState, resetAfterCompletion]);
 
   const renderStatus = () => {
+      if(user.status === 'BLOCKED') return <div className="text-red-400 font-semibold">Account Blocked</div>
       if(processState === ProcessState.Approved) return <div className="text-green-400 font-semibold">Transaction Approved</div>
       if(processState === ProcessState.Blocked) return <div className="text-red-400 font-semibold">Transaction Blocked & Notified</div>
       if(processState === ProcessState.VerificationBiometric || processState === ProcessState.VerificationOTP) return <div className="text-yellow-400 font-semibold">Verification Required</div>
@@ -204,9 +212,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
                     type="text" id="recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)}
                     className="block w-full rounded-md border-gray-600 bg-gray-900/50 pl-10 py-2 focus:border-cyan-500 focus:ring-cyan-500"
                     placeholder="UPI, mobile number, or contact"
-                    disabled={isFinalState}
+                    disabled={isFinalState || user.status === 'BLOCKED'}
                   />
-                  <button onClick={() => setIsScannerOpen(true)} className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-cyan-400">
+                  <button onClick={() => setIsScannerOpen(true)} className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-cyan-400"  disabled={isFinalState || user.status === 'BLOCKED'}>
                     <QrCodeIcon className="h-5 w-5" />
                   </button>
                 </div>
@@ -221,7 +229,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
                     type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)}
                     className="block w-full rounded-md border-gray-600 bg-gray-900/50 pl-7 py-2 focus:border-cyan-500 focus:ring-cyan-500"
                     placeholder="0.00"
-                     disabled={isFinalState}
+                     disabled={isFinalState || user.status === 'BLOCKED'}
                   />
                 </div>
               </div>
@@ -235,7 +243,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
                   <div className="text-center text-gray-400">
                       <CpuIcon className="mx-auto w-16 h-16 text-gray-600 mb-4" />
                       <h3 className="text-xl font-semibold">Welcome, {user.name.split(' ')[0]}</h3>
-                      <p>Enter recipient and amount to begin analysis.</p>
+                      {user.status === 'BLOCKED' ? 
+                        <p className="text-red-400 mt-2">Your account is currently blocked for security reasons.</p> :
+                        <p>Enter recipient and amount to begin analysis.</p>
+                      }
                   </div>
               )}
 
@@ -336,8 +347,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
       />
       <FaceVerificationModal
         isOpen={processState === ProcessState.VerificationBiometric}
+        user={user}
         onClose={() => handleUserRejection(false)}
         onSuccess={handleVerificationSuccess}
+        onFailure={handleVerificationFailureWrapper}
       />
       <QRScannerModal
         isOpen={isScannerOpen}

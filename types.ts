@@ -8,19 +8,30 @@ export interface User {
   dob: string;
   mobile: string;
   email: string;
+  passwordHash: string;
   status: AccountStatus;
+  faceReferenceImage?: string; // Base64 encoded image
 }
 
 export interface BankDetails {
   bankName: string;
   accountNumber: string;
+  branchName: string;
+  ifscCode: string;
+}
+
+export interface EncryptedData {
+  iv: string; // Base64 encoded IV
+  ciphertext: string; // Base64 encoded ciphertext
 }
 
 // Represents how data is stored in the "database"
 export interface EncryptedBankDetails {
   userId: string;
-  encryptedBankName: string;
-  encryptedAccountNumber: string;
+  encryptedBankName: EncryptedData;
+  encryptedAccountNumber: EncryptedData;
+  encryptedBranchName: EncryptedData;
+  encryptedIfscCode: EncryptedData;
 }
 
 export type TransactionStatus = 'PENDING' | 'APPROVED' | 'BLOCKED_BY_AI' | 'BLOCKED_BY_USER' | 'FLAGGED_BY_USER' | 'CLEARED_BY_ANALYST' | 'ESCALATED';
@@ -77,4 +88,15 @@ export enum RiskLevel {
     Medium = 'MEDIUM',
     High = 'HIGH',
     Critical = 'CRITICAL'
+}
+
+export type VerificationIncidentStatus = 'PENDING_REVIEW' | 'ESCALATED' | 'RESOLVED';
+
+export interface VerificationIncident {
+  id: string;
+  userId: string;
+  userName: string;
+  timestamp: string;
+  capturedImage: string; // Base64 of the failed attempt
+  status: VerificationIncidentStatus;
 }

@@ -1,6 +1,6 @@
 import React, { useState, FormEvent } from 'react';
 import { User } from '../types';
-import { getUserByEmail } from '../services/databaseService';
+import { verifyUserCredentials } from '../services/databaseService';
 import { LogInIcon, MailIcon, LockIcon } from '../components/icons';
 
 interface LoginPageProps {
@@ -19,19 +19,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToRegister }) =>
     setError(null);
     setLoading(true);
     
-    // In a real app, you'd send credentials to a backend.
-    // Here, we'll check against our mock DB. We ignore the password for simulation.
-    const user = await getUserByEmail(email);
-
-    // Simulate network delay
-    setTimeout(() => {
+    try {
+      const user = await verifyUserCredentials(email, password);
       if (user) {
         onLogin(user);
       } else {
-        setError('Invalid credentials. Please try again.');
+        setError('Invalid credentials. Please check your email and password.');
       }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   return (

@@ -9,10 +9,12 @@ interface BankDetailsFormProps {
 const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ onSubmit }) => {
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [branchName, setBranchName] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSubmit({ bankName, accountNumber });
+    onSubmit({ bankName, accountNumber, branchName, ifscCode });
   };
 
   return (
@@ -26,6 +28,7 @@ const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ onSubmit }) => {
             type="text" id="bankName" value={bankName} onChange={(e) => setBankName(e.target.value)}
             className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
             required
+            autoComplete="organization"
           />
         </div>
         <div>
@@ -36,12 +39,33 @@ const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ onSubmit }) => {
             required
             pattern="\d*"
             title="Account number should only contain digits."
+            autoComplete="off"
           />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="branchName" className="block text-sm font-medium text-gray-300">Branch Name</label>
+            <input
+              type="text" id="branchName" value={branchName} onChange={(e) => setBranchName(e.target.value)}
+              className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+              required
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label htmlFor="ifscCode" className="block text-sm font-medium text-gray-300">IFSC Code</label>
+            <input
+              type="text" id="ifscCode" value={ifscCode} onChange={(e) => setIfscCode(e.target.value)}
+              className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+              required
+              autoComplete="off"
+            />
+          </div>
         </div>
         <div className="pt-2">
           <button type="submit" className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900">
-            Complete Setup & Go to Dashboard
-            <ShieldCheckIcon className="ml-2 w-5 h-5" />
+            Next: Face Capture
+            <ArrowRightIcon className="ml-2 w-5 h-5" />
           </button>
         </div>
       </form>

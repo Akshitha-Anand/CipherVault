@@ -6,6 +6,7 @@ import TopAtRiskAccounts from '../components/Admin/TopAtRiskAccounts';
 import RiskHotspots from '../components/Admin/RiskHotspots';
 import WorkflowAnalysisChart from '../components/Admin/WorkflowAnalysisChart';
 import TransactionStatusChart from '../components/Admin/TransactionStatusChart';
+import EscalatedAlerts from '../components/Admin/EscalatedAlerts';
 
 export default function AdminPage() {
   return (
@@ -40,6 +41,9 @@ export default function AdminPage() {
           <TopAtRiskAccounts />
           <RiskHotspots />
         </div>
+        
+        <EscalatedAlerts />
+
       </div>
     </div>
   );
