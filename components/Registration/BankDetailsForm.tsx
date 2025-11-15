@@ -1,6 +1,6 @@
 import React, { useState, FormEvent } from 'react';
 import { BankDetails } from '../../types';
-import { ArrowRightIcon, ShieldCheckIcon } from '../icons';
+import { ArrowRightIcon } from '../icons';
 
 interface BankDetailsFormProps {
   onSubmit: (details: BankDetails) => void;
@@ -11,10 +11,13 @@ const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ onSubmit }) => {
   const [accountNumber, setAccountNumber] = useState('');
   const [branchName, setBranchName] = useState('');
   const [ifscCode, setIfscCode] = useState('');
+  const [accountHolderName, setAccountHolderName] = useState('');
+  const [accountType, setAccountType] = useState<'SAVINGS' | 'CURRENT'>('SAVINGS');
+  const [branchAddress, setBranchAddress] = useState('');
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSubmit({ bankName, accountNumber, branchName, ifscCode });
+    onSubmit({ bankName, accountNumber, branchName, ifscCode, accountHolderName, accountType, branchAddress });
   };
 
   return (
@@ -23,14 +26,39 @@ const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ onSubmit }) => {
       <p className="text-gray-400 mb-6">Step 2: Bank Information</p>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="bankName" className="block text-sm font-medium text-gray-300">Bank Name</label>
+          <label htmlFor="accountHolderName" className="block text-sm font-medium text-gray-300">Account Holder Name</label>
           <input
-            type="text" id="bankName" value={bankName} onChange={(e) => setBankName(e.target.value)}
+            type="text" id="accountHolderName" value={accountHolderName} onChange={(e) => setAccountHolderName(e.target.value)}
             className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
             required
-            autoComplete="organization"
+            autoComplete="name"
           />
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="bankName" className="block text-sm font-medium text-gray-300">Bank Name</label>
+              <input
+                type="text" id="bankName" value={bankName} onChange={(e) => setBankName(e.target.value)}
+                className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+                required
+                autoComplete="organization"
+              />
+            </div>
+            <div>
+                <label htmlFor="accountType" className="block text-sm font-medium text-gray-300">Account Type</label>
+                <select
+                    id="accountType"
+                    value={accountType}
+                    onChange={(e) => setAccountType(e.target.value as 'SAVINGS' | 'CURRENT')}
+                    className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+                >
+                    <option value="SAVINGS">Savings</option>
+                    <option value="CURRENT">Current</option>
+                </select>
+            </div>
+        </div>
+
         <div>
           <label htmlFor="accountNumber" className="block text-sm font-medium text-gray-300">Account Number</label>
           <input
@@ -61,6 +89,17 @@ const BankDetailsForm: React.FC<BankDetailsFormProps> = ({ onSubmit }) => {
               autoComplete="off"
             />
           </div>
+        </div>
+        <div>
+            <label htmlFor="branchAddress" className="block text-sm font-medium text-gray-300">Branch Address</label>
+            <textarea
+                id="branchAddress"
+                value={branchAddress}
+                onChange={(e) => setBranchAddress(e.target.value)}
+                rows={3}
+                className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+                required
+            ></textarea>
         </div>
         <div className="pt-2">
           <button type="submit" className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900">

@@ -18,12 +18,14 @@ enum RegisterStep {
 
 export default function RegisterPage({ onRegisterSuccess, onSwitchToLogin }: RegisterPageProps) {
   const [step, setStep] = useState<RegisterStep>(RegisterStep.Personal);
-  const [personalDetails, setPersonalDetails] = useState<Omit<User, 'id' | 'status' | 'passwordHash'> & { password: string } | null>(null);
+  // FIX: Omit `createdAt` from personal details type to match form data.
+  const [personalDetails, setPersonalDetails] = useState<Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string } | null>(null);
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const handlePersonalSubmit = async (details: Omit<User, 'id' | 'status' | 'passwordHash'> & { password: string }) => {
+  // FIX: Omit `createdAt` from details parameter type to match form data.
+  const handlePersonalSubmit = async (details: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string }) => {
     setApiError(null);
     setIsVerifying(true);
     try {

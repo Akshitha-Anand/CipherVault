@@ -11,6 +11,8 @@ export interface User {
   passwordHash: string;
   status: AccountStatus;
   faceReferenceImage?: string; // Base64 encoded image
+  createdAt: string;
+  adminNotes?: string[];
 }
 
 export interface BankDetails {
@@ -18,6 +20,9 @@ export interface BankDetails {
   accountNumber: string;
   branchName: string;
   ifscCode: string;
+  accountHolderName: string;
+  accountType: 'SAVINGS' | 'CURRENT';
+  branchAddress: string;
 }
 
 export interface EncryptedData {
@@ -32,6 +37,9 @@ export interface EncryptedBankDetails {
   encryptedAccountNumber: EncryptedData;
   encryptedBranchName: EncryptedData;
   encryptedIfscCode: EncryptedData;
+  encryptedAccountHolderName: EncryptedData;
+  encryptedAccountType: EncryptedData;
+  encryptedBranchAddress: EncryptedData;
 }
 
 export type TransactionStatus = 'PENDING' | 'APPROVED' | 'BLOCKED_BY_AI' | 'BLOCKED_BY_USER' | 'FLAGGED_BY_USER' | 'CLEARED_BY_ANALYST' | 'ESCALATED';
@@ -69,6 +77,13 @@ export interface AccountHealthStats {
         medium: number;
         high: number;
     };
+    stabilityScore: number;
+}
+
+export interface UserAnalyticsData {
+  spendingOverTime: { date: string; amount: number }[];
+  spendingByCategory: { category: string; amount: number }[];
+  topPayees: { recipient: string; amount: number }[];
 }
 
 export enum ProcessState {

@@ -7,6 +7,7 @@ import RiskHotspots from '../components/Admin/RiskHotspots';
 import WorkflowAnalysisChart from '../components/Admin/WorkflowAnalysisChart';
 import TransactionStatusChart from '../components/Admin/TransactionStatusChart';
 import EscalatedAlerts from '../components/Admin/EscalatedAlerts';
+import BlockedAccountsManager from '../components/Admin/BlockedAccountsManager';
 
 export default function AdminPage() {
   return (
@@ -36,6 +37,8 @@ export default function AdminPage() {
                 <TransactionStatusChart />
             </div>
         </div>
+
+        <BlockedAccountsManager />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TopAtRiskAccounts />

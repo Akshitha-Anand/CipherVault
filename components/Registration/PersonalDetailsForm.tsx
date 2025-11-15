@@ -3,7 +3,8 @@ import { User } from '../../types';
 import { ArrowRightIcon, LockIcon } from '../icons';
 
 interface PersonalDetailsFormProps {
-  onSubmit: (details: Omit<User, 'id' | 'status' | 'passwordHash'> & { password: string }) => void;
+  // FIX: Omit `createdAt` as it's not provided by the form.
+  onSubmit: (details: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string }) => void;
   apiError: string | null;
   isVerifying: boolean;
 }

@@ -24,10 +24,10 @@ const mockHashes = {
 
 const db: Database = {
     users: [
-        { id: 'user-1', name: 'Rohan Sharma', dob: '1995-08-15', mobile: '9876543210', email: 'rohan.sharma@email.com', passwordHash: mockHashes.user1, status: 'ACTIVE', faceReferenceImage: undefined },
-        { id: 'user-2', name: 'Priya Patel', dob: '1992-03-22', mobile: '9123456789', email: 'priya.patel@email.com', passwordHash: mockHashes.user2, status: 'ACTIVE', faceReferenceImage: undefined },
-        { id: 'user-3', name: 'Amit Singh', dob: '1988-11-10', mobile: '9988776655', email: 'amit.singh@email.com', passwordHash: mockHashes.user3, status: 'BLOCKED', faceReferenceImage: undefined },
-        { id: 'user-4', name: 'Sunita Rao', dob: '2000-01-30', mobile: '9000011111', email: 'sunita.rao@email.com', passwordHash: mockHashes.user4, status: 'UNDER_REVIEW', faceReferenceImage: undefined },
+        { id: 'user-1', name: 'Rohan Sharma', dob: '1995-08-15', mobile: '9876543210', email: 'rohan.sharma@email.com', passwordHash: mockHashes.user1, status: 'ACTIVE', faceReferenceImage: undefined, createdAt: generatePastDate(365), adminNotes: [] },
+        { id: 'user-2', name: 'Priya Patel', dob: '1992-03-22', mobile: '9123456789', email: 'priya.patel@email.com', passwordHash: mockHashes.user2, status: 'ACTIVE', faceReferenceImage: undefined, createdAt: generatePastDate(730), adminNotes: [] },
+        { id: 'user-3', name: 'Amit Singh', dob: '1988-11-10', mobile: '9988776655', email: 'amit.singh@email.com', passwordHash: mockHashes.user3, status: 'BLOCKED', faceReferenceImage: undefined, createdAt: generatePastDate(120), adminNotes: ["Account blocked due to multiple high-risk transaction attempts."] },
+        { id: 'user-4', name: 'Sunita Rao', dob: '2000-01-30', mobile: '9000011111', email: 'sunita.rao@email.com', passwordHash: mockHashes.user4, status: 'UNDER_REVIEW', faceReferenceImage: undefined, createdAt: generatePastDate(50), adminNotes: ["Analyst requested more information regarding a medium-risk transaction."] },
     ],
     bankDetails: [
         { 
@@ -36,6 +36,9 @@ const db: Database = {
             encryptedAccountNumber: { iv: 'mockIV2base64==', ciphertext: 'mockCiphertextForAcc1==' },
             encryptedBranchName: { iv: 'mockIV_br1', ciphertext: 'mockCiphertextForBranch1=='},
             encryptedIfscCode: { iv: 'mockIV_ifsc1', ciphertext: 'mockCiphertextForIfsc1=='},
+            encryptedAccountHolderName: { iv: 'mockIV_ahn1', ciphertext: 'mockCiphertextForHolder1=='},
+            encryptedAccountType: { iv: 'mockIV_at1', ciphertext: 'mockCiphertextForType1=='},
+            encryptedBranchAddress: { iv: 'mockIV_addr1', ciphertext: 'mockCiphertextForAddr1=='},
         },
         { 
             userId: 'user-2', 
@@ -43,6 +46,9 @@ const db: Database = {
             encryptedAccountNumber: { iv: 'mockIV4base64==', ciphertext: 'mockCiphertextForAcc2==' },
             encryptedBranchName: { iv: 'mockIV_br2', ciphertext: 'mockCiphertextForBranch2=='},
             encryptedIfscCode: { iv: 'mockIV_ifsc2', ciphertext: 'mockCiphertextForIfsc2=='},
+            encryptedAccountHolderName: { iv: 'mockIV_ahn2', ciphertext: 'mockCiphertextForHolder2=='},
+            encryptedAccountType: { iv: 'mockIV_at2', ciphertext: 'mockCiphertextForType2=='},
+            encryptedBranchAddress: { iv: 'mockIV_addr2', ciphertext: 'mockCiphertextForAddr2=='},
         },
         { 
             userId: 'user-3', 
@@ -50,6 +56,9 @@ const db: Database = {
             encryptedAccountNumber: { iv: 'mockIV6base64==', ciphertext: 'mockCiphertextForAcc3==' },
             encryptedBranchName: { iv: 'mockIV_br3', ciphertext: 'mockCiphertextForBranch3=='},
             encryptedIfscCode: { iv: 'mockIV_ifsc3', ciphertext: 'mockCiphertextForIfsc3=='},
+            encryptedAccountHolderName: { iv: 'mockIV_ahn3', ciphertext: 'mockCiphertextForHolder3=='},
+            encryptedAccountType: { iv: 'mockIV_at3', ciphertext: 'mockCiphertextForType3=='},
+            encryptedBranchAddress: { iv: 'mockIV_addr3', ciphertext: 'mockCiphertextForAddr3=='},
         },
         { 
             userId: 'user-4', 
@@ -57,6 +66,9 @@ const db: Database = {
             encryptedAccountNumber: { iv: 'mockIV8base64==', ciphertext: 'mockCiphertextForAcc4==' },
             encryptedBranchName: { iv: 'mockIV_br4', ciphertext: 'mockCiphertextForBranch4=='},
             encryptedIfscCode: { iv: 'mockIV_ifsc4', ciphertext: 'mockCiphertextForIfsc4=='},
+            encryptedAccountHolderName: { iv: 'mockIV_ahn4', ciphertext: 'mockCiphertextForHolder4=='},
+            encryptedAccountType: { iv: 'mockIV_at4', ciphertext: 'mockCiphertextForType4=='},
+            encryptedBranchAddress: { iv: 'mockIV_addr4', ciphertext: 'mockCiphertextForAddr4=='},
         },
     ],
     transactions: [

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction } from '../types';
+import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction, UserAnalyticsData } from '../types';
 import { analyzeTransaction } from '../services/geminiService';
 import { addTransaction, updateTransactionStatus } from '../services/databaseService';
 import { useDebounce } from '../hooks/useDebounce';
@@ -8,10 +8,12 @@ import OtpModal from './Verification/OtpModal';
 import FaceVerificationModal from './Verification/FaceVerificationModal';
 import AccountHealthDashboard from './AccountHealthDashboard';
 import QRScannerModal from './Verification/QRScannerModal';
+import UserAnalyticsDashboard from './User/UserAnalyticsDashboard';
 
 interface UserDashboardProps {
   user: User;
   accountHealth: AccountHealthStats;
+  analyticsData: UserAnalyticsData;
   onTransactionComplete: () => void;
   onVerificationFailure: (transaction: Transaction, capturedImage: string) => void;
   onLogout: () => void;
@@ -33,7 +35,7 @@ const riskConfig = {
     [RiskLevel.Critical]: { color: 'red', label: 'Critical Risk', scoreRange: '91-100%' },
 };
 
-const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTransactionComplete, onVerificationFailure, onLogout }) => {
+const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, analyticsData, onTransactionComplete, onVerificationFailure, onLogout }) => {
   const [processState, setProcessState] = useState<ProcessState>(ProcessState.Idle);
   const [analysisResult, setAnalysisResult] = useState<RiskAnalysisResult | null>(null);
   const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null);
@@ -142,7 +144,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
     }
   }
 
-  const resetAfterCompletion = () => {
+  const resetAfterCompletion = useCallback(() => {
     onTransactionComplete();
     setRecipient('');
     setAmount('');
@@ -150,7 +152,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
     setAnalysisResult(null);
     setCurrentTransaction(null);
     setError(null);
-  }
+  }, [onTransactionComplete]);
 
   const riskLevel = getRiskLevel(analysisResult?.riskScore ?? null);
   const config = riskConfig[riskLevel];
@@ -172,7 +174,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
           }, 4000);
           return () => clearTimeout(timer);
       }
-  }, [processState, resetAfterCompletion]);
+  }, [processState, isFinalState, resetAfterCompletion]);
 
   const renderStatus = () => {
       if(user.status === 'BLOCKED') return <div className="text-red-400 font-semibold">Account Blocked</div>
@@ -310,6 +312,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, onTr
         </div>
 
         <AccountHealthDashboard stats={accountHealth} />
+        
+        <div className="mt-8">
+            <UserAnalyticsDashboard analytics={analyticsData} />
+        </div>
       </div>
       
       {/* Action Required Modal */}

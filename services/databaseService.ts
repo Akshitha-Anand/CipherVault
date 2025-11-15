@@ -1,5 +1,5 @@
 import db from '../database/mockDatabase';
-import { User, BankDetails, Transaction, EncryptedBankDetails, AccountStatus, TransactionStatus, RiskLevel, EncryptedData, VerificationIncident } from '../types';
+import { User, BankDetails, Transaction, EncryptedBankDetails, AccountStatus, TransactionStatus, RiskLevel, EncryptedData, VerificationIncident, UserAnalyticsData } from '../types';
 
 // --- SECURE HASHING & ENCRYPTION UTILS ---
 
@@ -122,7 +122,7 @@ const decrypt = async (encryptedData: EncryptedData): Promise<string> => {
 
 // --- USER MANAGEMENT ---
 
-export const addUser = async (userData: Omit<User, 'id' | 'status' | 'passwordHash'> & { password: string, faceReferenceImage: string }): Promise<User> => {
+export const addUser = async (userData: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string, faceReferenceImage: string }): Promise<User> => {
     const existingUser = await getUserByEmail(userData.email);
     if (existingUser) {
         throw new Error('An account with this email already exists.');
@@ -138,6 +138,8 @@ export const addUser = async (userData: Omit<User, 'id' | 'status' | 'passwordHa
         id: `user-${Date.now()}`,
         status: 'ACTIVE',
         passwordHash: passwordHash,
+        createdAt: new Date().toISOString(),
+        adminNotes: [],
     };
     db.users.push(newUser);
     return newUser;
@@ -180,6 +182,9 @@ export const addBankDetails = async (userId: string, details: BankDetails): Prom
     const encryptedAccountNumber = await encrypt(details.accountNumber);
     const encryptedBranchName = await encrypt(details.branchName);
     const encryptedIfscCode = await encrypt(details.ifscCode);
+    const encryptedAccountHolderName = await encrypt(details.accountHolderName);
+    const encryptedAccountType = await encrypt(details.accountType);
+    const encryptedBranchAddress = await encrypt(details.branchAddress);
     
     const encryptedDetails: EncryptedBankDetails = {
         userId,
@@ -187,6 +192,9 @@ export const addBankDetails = async (userId: string, details: BankDetails): Prom
         encryptedAccountNumber,
         encryptedBranchName,
         encryptedIfscCode,
+        encryptedAccountHolderName,
+        encryptedAccountType,
+        encryptedBranchAddress,
     };
     // Remove old details if they exist
     const index = db.bankDetails.findIndex(bd => bd.userId === userId);
@@ -357,46 +365,188 @@ export const escalateIncident = async (incidentId: string): Promise<boolean> => 
 
 
 // --- BIOMETRIC SIMULATION ---
+const getPixelData = async (base64Image: string): Promise<Uint8ClampedArray | null> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            // Down-sample for performance and to generalize the image
+            const size = 32; 
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0, size, size);
+                resolve(ctx.getImageData(0, 0, size, size).data);
+            } else {
+                resolve(null);
+            }
+        };
+        img.onerror = () => resolve(null);
+        img.src = base64Image;
+    });
+};
 
 /**
- * A simple, fuzzy comparison of two base64 image strings.
- * This is a simulation and not cryptographically secure.
- * It checks for similarity in length and a checksum of character codes.
+ * Creates a "digital signature" of an image by down-sampling it and analyzing pixel data.
+ * This is more robust for simulation as it's less sensitive to minor lighting changes
+ * than the previous character code sampling method.
  */
-export const simulateBiometricComparison = (baseImage: string, newImage: string): Promise<boolean> => {
-    return new Promise(resolve => {
-        setTimeout(() => {
-            if (!baseImage || !newImage) {
-                resolve(false);
+const createImageSignature = async (base64Image: string): Promise<number[] | null> => {
+    const pixelData = await getPixelData(base64Image);
+    if (!pixelData) return null;
+
+    const signature = [];
+    // Create a signature based on the average brightness of 64 blocks of pixels
+    const blockSize = Math.floor(pixelData.length / 64);
+    for (let i = 0; i < 64; i++) {
+        let blockSum = 0;
+        for (let j = 0; j < blockSize; j += 4) { // increment by 4 for R,G,B,A
+            const index = i * blockSize + j;
+            if(index + 2 < pixelData.length) {
+                const r = pixelData[index];
+                const g = pixelData[index + 1];
+                const b = pixelData[index + 2];
+                blockSum += (r + g + b) / 3;
             }
+        }
+        signature.push(blockSum / (blockSize / 4));
+    }
+    return signature;
+};
 
-            // 1. Check if lengths are reasonably similar (within 20%)
-            const lengthDifference = Math.abs(baseImage.length - newImage.length);
-            const lengthThreshold = baseImage.length * 0.20;
-            if (lengthDifference > lengthThreshold) {
-                resolve(false);
-                return;
-            }
+export const simulateBiometricComparison = async (baseImage: string, newImage: string): Promise<boolean> => {
+    if (!baseImage || !newImage) return false;
 
-            // 2. Simple checksum of character codes for a block of the string
-            const getChecksum = (str: string) => {
-                let sum = 0;
-                const part = str.substring(str.length / 2, str.length / 2 + 1000); // Check a 1000-char block from the middle
-                for (let i = 0; i < part.length; i++) {
-                    sum += part.charCodeAt(i);
-                }
-                return sum;
-            };
+    const [baseSignature, newSignature] = await Promise.all([
+        createImageSignature(baseImage),
+        createImageSignature(newImage)
+    ]);
 
-            const baseChecksum = getChecksum(baseImage);
-            const newChecksum = getChecksum(newImage);
+    if (!baseSignature || !newSignature) return false;
 
-            // 3. Check if checksums are reasonably similar (within 5%)
-            const checksumDifference = Math.abs(baseChecksum - newChecksum);
-            const checksumThreshold = baseChecksum * 0.05;
-            
-            resolve(checksumDifference <= checksumThreshold);
+    let totalDifference = 0;
+    for (let i = 0; i < baseSignature.length; i++) {
+        totalDifference += Math.abs(baseSignature[i] - newSignature[i]);
+    }
+    const averageDifference = totalDifference / baseSignature.length;
+    
+    // Increased threshold for more tolerance to lighting/angle changes
+    const threshold = 25; 
 
-        }, 500); // Simulate processing time
+    console.log(`Biometric Similarity Score (lower is better): ${averageDifference.toFixed(2)}`, `Threshold: ${threshold}`);
+    return averageDifference <= threshold;
+};
+
+
+// --- ACCOUNT STABILITY SCORE ---
+
+export const calculateAccountStabilityScore = async (userId: string): Promise<number> => {
+    const user = await getUser(userId);
+    const transactions = await getTransactionsForUser(userId);
+    const incidents = db.verificationIncidents.filter(inc => inc.userId === userId);
+
+    if (!user) return 0;
+
+    let score = 50; // Start with a neutral score
+
+    // Factor 1: Account Age (up to +15 points)
+    const accountAgeDays = (new Date().getTime() - new Date(user.createdAt).getTime()) / (1000 * 3600 * 24);
+    score += Math.min(15, Math.floor(accountAgeDays / 30)); // 1 point per month, max 15
+
+    // Factor 2: Transaction History (up to +15 points)
+    score += Math.min(15, Math.floor(transactions.length / 5)); // 1 point per 5 transactions, max 15
+
+    // Factor 3: Risk Profile (can be negative or positive)
+    const highRiskTxns = transactions.filter(t => t.riskLevel === 'HIGH' || t.riskLevel === 'CRITICAL').length;
+    const lowRiskTxns = transactions.filter(t => t.riskLevel === 'LOW').length;
+    score -= highRiskTxns * 5; // -5 for each high risk transaction
+    score += Math.min(10, Math.floor(lowRiskTxns / 10)); // +1 for every 10 low risk, max 10
+
+    // Factor 4: Security Incidents (-25 each)
+    score -= incidents.length * 25;
+
+    // Factor 5: Account Status
+    if (user.status === 'BLOCKED') score -= 50;
+    if (user.status === 'UNDER_REVIEW') score -= 20;
+
+    // Normalize score to be between 0 and 100
+    return Math.max(0, Math.min(100, Math.round(score)));
+};
+
+
+// --- ADMIN ACTIONS ---
+export const getBlockedUsers = async (): Promise<User[]> => {
+    return db.users.filter(u => u.status === 'BLOCKED');
+};
+
+export const addAdminNoteToUser = async (userId: string, note: string): Promise<boolean> => {
+    const user = await getUser(userId);
+    if(user) {
+        if (!user.adminNotes) {
+            user.adminNotes = [];
+        }
+        user.adminNotes.push(`${new Date().toISOString()}: ${note}`);
+        return true;
+    }
+    return false;
+};
+
+// --- USER ANALYTICS ---
+
+const categorizeRecipient = (recipient: string): string => {
+    const lowerRecipient = recipient.toLowerCase();
+    if (['amazon', 'flipkart', 'myntra'].some(s => lowerRecipient.includes(s))) return 'Shopping';
+    if (['zomato', 'swiggy', 'bigbasket'].some(s => lowerRecipient.includes(s))) return 'Food & Dining';
+    if (['netflix', 'recharge'].some(s => lowerRecipient.includes(s))) return 'Bills & Utilities';
+    if (['uber', 'bookmyshow'].some(s => lowerRecipient.includes(s))) return 'Travel & Entertainment';
+    if (['crypto', 'exchange'].some(s => lowerRecipient.includes(s))) return 'Investments';
+    if (['pharmacy', 'medical'].some(s => lowerRecipient.includes(s))) return 'Health';
+    return 'Miscellaneous';
+};
+
+export const getUserAnalytics = async (userId: string): Promise<UserAnalyticsData> => {
+    const transactions = await getTransactionsForUser(userId);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentTransactions = transactions.filter(tx => new Date(tx.time) >= thirtyDaysAgo);
+
+    // Spending over time (last 30 days)
+    const spendingOverTimeMap: { [key: string]: number } = {};
+    for (let i = 29; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateString = date.toISOString().split('T')[0];
+        spendingOverTimeMap[dateString] = 0;
+    }
+    recentTransactions.forEach(tx => {
+        const dateString = tx.time.split('T')[0];
+        if (spendingOverTimeMap[dateString] !== undefined) {
+            spendingOverTimeMap[dateString] += tx.amount;
+        }
     });
+    const spendingOverTime = Object.entries(spendingOverTimeMap).map(([date, amount]) => ({ date, amount }));
+
+    // Spending by category (all time)
+    const spendingByCategoryMap: { [key: string]: number } = {};
+    transactions.forEach(tx => {
+        const category = categorizeRecipient(tx.recipient);
+        spendingByCategoryMap[category] = (spendingByCategoryMap[category] || 0) + tx.amount;
+    });
+    const spendingByCategory = Object.entries(spendingByCategoryMap)
+        .map(([category, amount]) => ({ category, amount }))
+        .sort((a, b) => b.amount - a.amount);
+
+    // Top payees (all time)
+    const topPayeesMap: { [key: string]: number } = {};
+    transactions.forEach(tx => {
+        topPayeesMap[tx.recipient] = (topPayeesMap[tx.recipient] || 0) + tx.amount;
+    });
+    const topPayees = Object.entries(topPayeesMap)
+        .map(([recipient, amount]) => ({ recipient, amount }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5);
+    
+    return { spendingOverTime, spendingByCategory, topPayees };
 };
