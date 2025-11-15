@@ -364,20 +364,26 @@ export const escalateIncident = async (incidentId: string): Promise<boolean> => 
 };
 
 
-// --- BIOMETRIC SIMULATION ---
-const getPixelData = async (base64Image: string): Promise<Uint8ClampedArray | null> => {
+// --- BIOMETRIC SIMULATION (PERCEPTUAL HASH) ---
+const getGrayscalePixelData = async (base64Image: string, width: number, height: number): Promise<Uint8ClampedArray | null> => {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            // Down-sample for performance and to generalize the image
-            const size = 32; 
-            canvas.width = size;
-            canvas.height = size;
+            canvas.width = width;
+            canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (ctx) {
-                ctx.drawImage(img, 0, 0, size, size);
-                resolve(ctx.getImageData(0, 0, size, size).data);
+                ctx.drawImage(img, 0, 0, width, height);
+                const imageData = ctx.getImageData(0, 0, width, height);
+                // Convert to grayscale for hash consistency
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    const avg = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+                    imageData.data[i] = avg; // R
+                    imageData.data[i + 1] = avg; // G
+                    imageData.data[i + 2] = avg; // B
+                }
+                resolve(imageData.data);
             } else {
                 resolve(null);
             }
@@ -388,54 +394,60 @@ const getPixelData = async (base64Image: string): Promise<Uint8ClampedArray | nu
 };
 
 /**
- * Creates a "digital signature" of an image by down-sampling it and analyzing pixel data.
- * This is more robust for simulation as it's less sensitive to minor lighting changes
- * than the previous character code sampling method.
+ * Creates a "difference hash" of an image. This is a form of perceptual hash
+ * that is resilient to minor changes in lighting and angle but sensitive to
+ * major changes in image structure (i.e., a different face).
  */
-const createImageSignature = async (base64Image: string): Promise<number[] | null> => {
-    const pixelData = await getPixelData(base64Image);
+const createDifferenceHash = async (base64Image: string): Promise<string | null> => {
+    const width = 9, height = 8;
+    const pixelData = await getGrayscalePixelData(base64Image, width, height);
     if (!pixelData) return null;
 
-    const signature = [];
-    // Create a signature based on the average brightness of 64 blocks of pixels
-    const blockSize = Math.floor(pixelData.length / 64);
-    for (let i = 0; i < 64; i++) {
-        let blockSum = 0;
-        for (let j = 0; j < blockSize; j += 4) { // increment by 4 for R,G,B,A
-            const index = i * blockSize + j;
-            if(index + 2 < pixelData.length) {
-                const r = pixelData[index];
-                const g = pixelData[index + 1];
-                const b = pixelData[index + 2];
-                blockSum += (r + g + b) / 3;
-            }
+    let hash = '';
+    // Compare adjacent pixels' brightness
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width - 1; x++) {
+            const leftPixelIndex = (y * width + x) * 4;
+            const rightPixelIndex = (y * width + (x + 1)) * 4;
+            const leftPixelBrightness = pixelData[leftPixelIndex];
+            const rightPixelBrightness = pixelData[rightPixelIndex];
+            hash += (leftPixelBrightness > rightPixelBrightness) ? '1' : '0';
         }
-        signature.push(blockSum / (blockSize / 4));
     }
-    return signature;
+    return hash; // Returns a 64-bit string like '1011001...'
 };
 
+/**
+ * Compares two images by generating their perceptual hashes and calculating the
+ * Hamming distance (number of different bits) between them.
+ */
 export const simulateBiometricComparison = async (baseImage: string, newImage: string): Promise<boolean> => {
     if (!baseImage || !newImage) return false;
 
-    const [baseSignature, newSignature] = await Promise.all([
-        createImageSignature(baseImage),
-        createImageSignature(newImage)
+    const [baseHash, newHash] = await Promise.all([
+        createDifferenceHash(baseImage),
+        createDifferenceHash(newImage)
     ]);
 
-    if (!baseSignature || !newSignature) return false;
-
-    let totalDifference = 0;
-    for (let i = 0; i < baseSignature.length; i++) {
-        totalDifference += Math.abs(baseSignature[i] - newSignature[i]);
+    if (!baseHash || !newHash || baseHash.length !== newHash.length) {
+        console.error("Failed to generate one or both image hashes.");
+        return false;
     }
-    const averageDifference = totalDifference / baseSignature.length;
-    
-    // Increased threshold for more tolerance to lighting/angle changes
-    const threshold = 25; 
 
-    console.log(`Biometric Similarity Score (lower is better): ${averageDifference.toFixed(2)}`, `Threshold: ${threshold}`);
-    return averageDifference <= threshold;
+    // Calculate Hamming distance
+    let distance = 0;
+    for (let i = 0; i < baseHash.length; i++) {
+        if (baseHash[i] !== newHash[i]) {
+            distance++;
+        }
+    }
+    
+    // A common threshold for a 64-bit dHash is ~10.
+    // A lower threshold is stricter. This should distinguish different faces.
+    const threshold = 12;
+
+    console.log(`Biometric Hamming Distance (lower is better): ${distance}`, `Threshold: <= ${threshold}`);
+    return distance <= threshold;
 };
 
 
