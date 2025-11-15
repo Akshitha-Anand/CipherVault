@@ -1,0 +1,57 @@
+import { User, EncryptedBankDetails, Transaction, RiskLevel } from '../types';
+
+interface Database {
+    users: User[];
+    bankDetails: EncryptedBankDetails[];
+    transactions: Transaction[];
+}
+
+const generatePastDate = (daysAgo: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    return date.toISOString();
+};
+
+const db: Database = {
+    users: [
+        { id: 'user-1', name: 'Rohan Sharma', dob: '1995-08-15', mobile: '9876543210', email: 'rohan.sharma@email.com', status: 'ACTIVE' },
+        { id: 'user-2', name: 'Priya Patel', dob: '1992-03-22', mobile: '9123456789', email: 'priya.patel@email.com', status: 'ACTIVE' },
+        { id: 'user-3', name: 'Amit Singh', dob: '1988-11-10', mobile: '9988776655', email: 'amit.singh@email.com', status: 'BLOCKED' },
+        { id: 'user-4', name: 'Sunita Rao', dob: '2000-01-30', mobile: '9000011111', email: 'sunita.rao@email.com', status: 'UNDER_REVIEW' },
+    ],
+    bankDetails: [
+        { userId: 'user-1', encryptedBankName: 'U2FsdGVkX1+vGfJb...', encryptedAccountNumber: 'U2FsdGVkX1+zKjHl...' },
+        { userId: 'user-2', encryptedBankName: 'U2FsdGVkX1+vABCD...', encryptedAccountNumber: 'U2FsdGVkX1+zEFGH...' },
+        { userId: 'user-3', encryptedBankName: 'U2FsdGVkX1+vIJKL...', encryptedAccountNumber: 'U2FsdGVkX1+zMNOP...' },
+        { userId: 'user-4', encryptedBankName: 'U2FsdGVkX1+vQRST...', encryptedAccountNumber: 'U2FsdGVkX1+zUVWX...' },
+    ],
+    transactions: [
+        // User 1 Transactions
+        { id: 'txn-1', userId: 'user-1', userName: 'Rohan Sharma', recipient: 'Amazon.in', amount: 3200, location: null, locationName: 'Mumbai', time: generatePastDate(25), riskLevel: RiskLevel.Low, riskScore: 15, status: 'APPROVED', aiAnalysisLog: ['Recipient is a trusted merchant.', 'Amount is within usual spending range.'] },
+        { id: 'txn-2', userId: 'user-1', userName: 'Rohan Sharma', recipient: 'Zomato', amount: 750, location: null, locationName: 'Mumbai', time: generatePastDate(22), riskLevel: RiskLevel.Low, riskScore: 10, status: 'APPROVED', aiAnalysisLog: ['Frequent merchant for user.', 'Low transaction amount.'] },
+        { id: 'txn-3', userId: 'user-1', userName: 'Rohan Sharma', recipient: 'Unusual Vendor Inc.', amount: 25000, location: null, locationName: 'Goa', time: generatePastDate(1), riskLevel: RiskLevel.High, riskScore: 85, status: 'FLAGGED_BY_USER', aiAnalysisLog: ['Recipient is new and unrecognized.', 'Amount is unusually high.', 'Transaction from a new location (Goa).'] },
+        { id: 'txn-4', userId: 'user-1', userName: 'Rohan Sharma', recipient: 'Flipkart', amount: 1500, location: null, locationName: 'Mumbai', time: generatePastDate(5), riskLevel: RiskLevel.Low, riskScore: 12, status: 'APPROVED', aiAnalysisLog: ['Trusted e-commerce site.', 'Normal spending amount.'] },
+        { id: 'txn-15', userId: 'user-1', userName: 'Rohan Sharma', recipient: 'Myntra', amount: 4500, location: null, locationName: 'Mumbai', time: generatePastDate(3), riskLevel: RiskLevel.Low, riskScore: 18, status: 'APPROVED', aiAnalysisLog: ['Frequent clothing merchant.', 'Amount is consistent with past purchases.'] },
+
+        // User 2 Transactions
+        { id: 'txn-5', userId: 'user-2', userName: 'Priya Patel', recipient: 'Netflix', amount: 649, location: null, locationName: 'Delhi', time: generatePastDate(28), riskLevel: RiskLevel.Low, riskScore: 5, status: 'APPROVED', aiAnalysisLog: ['Recurring subscription payment.', 'Known merchant.'] },
+        { id: 'txn-6', userId: 'user-2', userName: 'Priya Patel', recipient: 'CryptoExchange', amount: 50000, location: null, locationName: 'Unknown', time: generatePastDate(15), riskLevel: RiskLevel.Critical, riskScore: 95, status: 'BLOCKED_BY_AI', aiAnalysisLog: ['High-risk recipient category (Crypto).', 'Very large amount, first time transaction.', 'Location is unknown.'] },
+        { id: 'txn-7', userId: 'user-2', userName: 'Priya Patel', recipient: 'Swiggy', amount: 450, location: null, locationName: 'Delhi', time: generatePastDate(2), riskLevel: RiskLevel.Low, riskScore: 8, status: 'APPROVED', aiAnalysisLog: ['Frequent food delivery service.'] },
+        { id: 'txn-16', userId: 'user-2', userName: 'Priya Patel', recipient: 'Uber', amount: 320, location: null, locationName: 'Delhi', time: generatePastDate(4), riskLevel: RiskLevel.Low, riskScore: 9, status: 'APPROVED', aiAnalysisLog: ['Common transport expense.'] },
+        
+        // User 3 Transactions (Blocked user)
+        { id: 'txn-8', userId: 'user-3', userName: 'Amit Singh', recipient: 'Suspicious Site', amount: 12000, location: null, locationName: 'Bangalore', time: generatePastDate(10), riskLevel: RiskLevel.High, riskScore: 88, status: 'BLOCKED_BY_AI', aiAnalysisLog: ['Recipient flagged in threat intelligence databases.', 'Unusual spending category for user.'] },
+        { id: 'txn-9', userId: 'user-3', userName: 'Amit Singh', recipient: 'Foreign Transfer', amount: 75000, location: null, locationName: 'Singapore', time: generatePastDate(9), riskLevel: RiskLevel.Critical, riskScore: 98, status: 'BLOCKED_BY_AI', aiAnalysisLog: ['Large international transfer is highly unusual.', 'Recipient country is a known risk zone.'] },
+        
+        // User 4 Transactions
+        { id: 'txn-10', userId: 'user-4', userName: 'Sunita Rao', recipient: 'BigBasket', amount: 2200, location: null, locationName: 'Chennai', time: generatePastDate(18), riskLevel: RiskLevel.Low, riskScore: 20, status: 'APPROVED', aiAnalysisLog: ['Regular grocery purchase.'] },
+        { id: 'txn-11', userId: 'user-4', userName: 'Sunita Rao', recipient: 'Mobile Recharge', amount: 599, location: null, locationName: 'Chennai', time: generatePastDate(12), riskLevel: RiskLevel.Low, riskScore: 10, status: 'APPROVED', aiAnalysisLog: ['Standard utility payment.'] },
+        { id: 'txn-12', userId: 'user-4', userName: 'Sunita Rao', recipient: 'Odd Charity Donation', amount: 10000, location: null, locationName: 'Kolkata', time: generatePastDate(6), riskLevel: RiskLevel.Medium, riskScore: 65, status: 'ESCALATED', aiAnalysisLog: ['One-time donation to a new recipient.', 'Amount is higher than average.', 'Location differs from user\'s primary city.'] },
+        
+        // More random transactions for volume
+        { id: 'txn-13', userId: 'user-1', userName: 'Rohan Sharma', recipient: 'BookMyShow', amount: 1200, location: null, locationName: 'Mumbai', time: generatePastDate(2), riskLevel: RiskLevel.Low, riskScore: 11, status: 'APPROVED', aiAnalysisLog: ['Standard entertainment purchase.'] },
+        { id: 'txn-14', userId: 'user-2', userName: 'Priya Patel', recipient: 'Pharmacy', amount: 800, location: null, locationName: 'Delhi', time: generatePastDate(1), riskLevel: RiskLevel.Low, riskScore: 14, status: 'APPROVED', aiAnalysisLog: ['Normal medical expense.'] },
+    ]
+};
+
+export default db;

@@ -1,0 +1,8 @@
+{
+  "name": "CipherVault - AI Fraud Detection",
+  "description": "An AI-powered financial fraud detection application that analyzes transaction details in real-time to calculate a risk score and determine the appropriate action, from approval to blocking and alerting.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
