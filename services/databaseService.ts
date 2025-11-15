@@ -363,6 +363,15 @@ export const escalateIncident = async (incidentId: string): Promise<boolean> => 
     return false;
 };
 
+export const resolveIncident = async (incidentId: string): Promise<boolean> => {
+    const incident = db.verificationIncidents.find(inc => inc.id === incidentId);
+    if(incident) {
+        incident.status = 'RESOLVED';
+        return true;
+    }
+    return false;
+}
+
 
 // --- BIOMETRIC SIMULATION (PERCEPTUAL HASH) ---
 const getGrayscalePixelData = async (base64Image: string, width: number, height: number): Promise<Uint8ClampedArray | null> => {
@@ -444,7 +453,8 @@ export const simulateBiometricComparison = async (baseImage: string, newImage: s
     
     // A common threshold for a 64-bit dHash is ~10.
     // A lower threshold is stricter. This should distinguish different faces.
-    const threshold = 12;
+    // Increased tolerance to prevent false negatives for the same user.
+    const threshold = 15;
 
     console.log(`Biometric Hamming Distance (lower is better): ${distance}`, `Threshold: <= ${threshold}`);
     return distance <= threshold;
