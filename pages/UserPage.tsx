@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, AccountHealthStats, Transaction, UserAnalyticsData } from '../types';
 import UserDashboard from '../components/UserDashboard';
@@ -5,10 +6,9 @@ import { getTransactionsForUser, getUser, createVerificationIncident, calculateA
 
 interface UserPageProps {
   user: User;
-  onLogout: () => void;
 }
 
-export default function UserPage({ user: initialUser, onLogout }: UserPageProps) {
+export default function UserPage({ user: initialUser }: UserPageProps) {
   const [currentUser, setCurrentUser] = useState<User>(initialUser);
   const [accountHealth, setAccountHealth] = useState<AccountHealthStats | null>(null);
   const [analyticsData, setAnalyticsData] = useState<UserAnalyticsData | null>(null);
@@ -78,7 +78,6 @@ export default function UserPage({ user: initialUser, onLogout }: UserPageProps)
         analyticsData={analyticsData}
         onTransactionComplete={handleTransactionCompletion} 
         onVerificationFailure={handleVerificationFailure}
-        onLogout={onLogout} 
       />
     </div>
   );

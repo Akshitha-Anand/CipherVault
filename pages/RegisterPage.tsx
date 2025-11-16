@@ -49,11 +49,11 @@ export default function RegisterPage({ onRegisterSuccess, onSwitchToLogin }: Reg
     setStep(RegisterStep.FaceCapture);
   };
   
-  const handleFaceSubmit = async (faceImage: string) => {
+  const handleFaceSubmit = async (faceImages: string[]) => {
     if (personalDetails && bankDetails) {
         try {
             // The addUser service still has a final check for safety
-            const user = await addUser({ ...personalDetails, faceReferenceImage: faceImage });
+            const user = await addUser({ ...personalDetails, faceReferenceImages: faceImages });
             await addBankDetails(user.id, bankDetails);
             onRegisterSuccess(user);
         } catch (error) {

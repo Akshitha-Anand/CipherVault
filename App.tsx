@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback } from 'react';
 import Header from './components/Header';
 import UserPage from './pages/UserPage';
@@ -56,15 +57,15 @@ export default function App() {
 
     switch (role) {
       case 'USER':
-        return <UserPage user={currentUser} onLogout={handleLogout} />;
+        return <UserPage user={currentUser} />;
       case 'ADMIN':
         return <AdminPage />;
       case 'ANALYST':
         return <SecurityAnalystPage />;
       default:
-        return <UserPage user={currentUser} onLogout={handleLogout} />;
+        return <UserPage user={currentUser} />;
     }
-  }, [role, currentUser, isRegistering, handleLogin, handleLogout]);
+  }, [role, currentUser, isRegistering, handleLogin]);
 
   const mainContentClass = currentUser ? "mt-8" : "flex items-center justify-center min-h-[calc(100vh-200px)]";
 
@@ -72,7 +73,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans antialiased relative overflow-hidden">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjAsIDM1LCA2MCwgMC4yNSkiPjxwYXRoIGQ9Ik0wIC41SDMybTAtMVYwIj48L3BhdGg+PC9zdmc+')] opacity-50"></div>
       <div className="relative z-10 container mx-auto px-4 py-8">
-        <Header />
+        <Header user={currentUser} onLogout={handleLogout} />
         {currentUser && <RoleSwitcher currentRole={role} setRole={setRole} />}
         <main className={mainContentClass}>
           {CurrentPage}

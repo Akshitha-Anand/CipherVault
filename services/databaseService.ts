@@ -1,5 +1,13 @@
 import db from '../database/mockDatabase';
-import { User, BankDetails, Transaction, EncryptedBankDetails, AccountStatus, TransactionStatus, RiskLevel, EncryptedData, VerificationIncident, UserAnalyticsData } from '../types';
+import { User, BankDetails, Transaction, EncryptedBankDetails, AccountStatus, TransactionStatus, RiskLevel, EncryptedData, VerificationIncident, UserAnalyticsData, TransactionType } from '../types';
+import { verifyFaceWithLiveness } from './geminiService';
+
+// --- CONSTANTS ---
+export const DAILY_UPI_LIMIT = 100000;
+export const WEEKLY_UPI_LIMIT = 500000;
+export const DAILY_IMPS_LIMIT = 500000;
+export const WEEKLY_IMPS_LIMIT = 2000000;
+
 
 // --- SECURE HASHING & ENCRYPTION UTILS ---
 
@@ -122,7 +130,7 @@ const decrypt = async (encryptedData: EncryptedData): Promise<string> => {
 
 // --- USER MANAGEMENT ---
 
-export const addUser = async (userData: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string, faceReferenceImage: string }): Promise<User> => {
+export const addUser = async (userData: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string, faceReferenceImages: string[] }): Promise<User> => {
     const existingUser = await getUserByEmail(userData.email);
     if (existingUser) {
         throw new Error('An account with this email already exists.');
@@ -134,7 +142,7 @@ export const addUser = async (userData: Omit<User, 'id' | 'status' | 'passwordHa
         dob: userData.dob,
         mobile: userData.mobile,
         email: userData.email,
-        faceReferenceImage: userData.faceReferenceImage,
+        faceReferenceImages: userData.faceReferenceImages,
         id: `user-${Date.now()}`,
         status: 'ACTIVE',
         passwordHash: passwordHash,
@@ -236,6 +244,35 @@ export const updateTransactionStatus = async (transactionId: string, status: Tra
         return true;
     }
     return false;
+};
+
+export const getUserDailyTransactionTotal = async (userId: string, type: TransactionType): Promise<number> => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const userTransactions = await getTransactionsForUser(userId);
+    
+    return userTransactions
+        .filter(tx => {
+            const txDate = new Date(tx.time);
+            return tx.type === type && txDate >= today && (tx.status === 'APPROVED' || tx.status === 'CLEARED_BY_ANALYST');
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
+};
+
+export const getUserWeeklyTransactionTotal = async (userId: string, type: TransactionType): Promise<number> => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const userTransactions = await getTransactionsForUser(userId);
+    
+    return userTransactions
+        .filter(tx => {
+            const txDate = new Date(tx.time);
+            return tx.type === type && txDate >= sevenDaysAgo && (tx.status === 'APPROVED' || tx.status === 'CLEARED_BY_ANALYST');
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
 };
 
 
@@ -373,92 +410,38 @@ export const resolveIncident = async (incidentId: string): Promise<boolean> => {
 }
 
 
-// --- BIOMETRIC SIMULATION (PERCEPTUAL HASH) ---
-const getGrayscalePixelData = async (base64Image: string, width: number, height: number): Promise<Uint8ClampedArray | null> => {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(img, 0, 0, width, height);
-                const imageData = ctx.getImageData(0, 0, width, height);
-                // Convert to grayscale for hash consistency
-                for (let i = 0; i < imageData.data.length; i += 4) {
-                    const avg = (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
-                    imageData.data[i] = avg; // R
-                    imageData.data[i + 1] = avg; // G
-                    imageData.data[i + 2] = avg; // B
-                }
-                resolve(imageData.data);
-            } else {
-                resolve(null);
-            }
-        };
-        img.onerror = () => resolve(null);
-        img.src = base64Image;
-    });
-};
+// --- BIOMETRIC SIMULATION (AI-POWERED) ---
 
 /**
- * Creates a "difference hash" of an image. This is a form of perceptual hash
- * that is resilient to minor changes in lighting and angle but sensitive to
- * major changes in image structure (i.e., a different face).
+ * Compares reference images against a live capture using the Gemini service,
+ * including a liveness check.
  */
-const createDifferenceHash = async (base64Image: string): Promise<string | null> => {
-    const width = 9, height = 8;
-    const pixelData = await getGrayscalePixelData(base64Image, width, height);
-    if (!pixelData) return null;
-
-    let hash = '';
-    // Compare adjacent pixels' brightness
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width - 1; x++) {
-            const leftPixelIndex = (y * width + x) * 4;
-            const rightPixelIndex = (y * width + (x + 1)) * 4;
-            const leftPixelBrightness = pixelData[leftPixelIndex];
-            const rightPixelBrightness = pixelData[rightPixelIndex];
-            hash += (leftPixelBrightness > rightPixelBrightness) ? '1' : '0';
-        }
+export const verifyFaceWithAI = async (
+    referenceImages: string[], 
+    liveImage: string, 
+    challenge: 'SMILE' | 'BLINK'
+): Promise<{ match: boolean, reason: string }> => {
+    if (!referenceImages || referenceImages.length === 0 || !liveImage) {
+        return { match: false, reason: "Missing reference or live image." };
     }
-    return hash; // Returns a 64-bit string like '1011001...'
+
+    try {
+        const result = await verifyFaceWithLiveness(referenceImages, liveImage, challenge);
+        
+        if (!result.isSamePerson) {
+            return { match: false, reason: "Face does not match our records." };
+        }
+        if (!result.livenessCheckPassed) {
+            return { match: false, reason: `Liveness check failed: ${result.reason}` };
+        }
+        return { match: true, reason: "Verification successful." };
+
+    } catch (error) {
+        console.error("AI Face Verification failed", error);
+        return { match: false, reason: "Could not complete verification due to a system error." };
+    }
 };
 
-/**
- * Compares two images by generating their perceptual hashes and calculating the
- * Hamming distance (number of different bits) between them.
- */
-export const simulateBiometricComparison = async (baseImage: string, newImage: string): Promise<boolean> => {
-    if (!baseImage || !newImage) return false;
-
-    const [baseHash, newHash] = await Promise.all([
-        createDifferenceHash(baseImage),
-        createDifferenceHash(newImage)
-    ]);
-
-    if (!baseHash || !newHash || baseHash.length !== newHash.length) {
-        console.error("Failed to generate one or both image hashes.");
-        return false;
-    }
-
-    // Calculate Hamming distance
-    let distance = 0;
-    for (let i = 0; i < baseHash.length; i++) {
-        if (baseHash[i] !== newHash[i]) {
-            distance++;
-        }
-    }
-    
-    // A common threshold for a 64-bit dHash is ~10.
-    // A lower threshold is stricter. This should distinguish different faces.
-    // Increased tolerance to prevent false negatives for the same user.
-    const threshold = 15;
-
-    console.log(`Biometric Hamming Distance (lower is better): ${distance}`, `Threshold: <= ${threshold}`);
-    return distance <= threshold;
-};
 
 
 // --- ACCOUNT STABILITY SCORE ---
@@ -518,12 +501,13 @@ export const addAdminNoteToUser = async (userId: string, note: string): Promise<
 
 const categorizeRecipient = (recipient: string): string => {
     const lowerRecipient = recipient.toLowerCase();
-    if (['amazon', 'flipkart', 'myntra'].some(s => lowerRecipient.includes(s))) return 'Shopping';
-    if (['zomato', 'swiggy', 'bigbasket'].some(s => lowerRecipient.includes(s))) return 'Food & Dining';
-    if (['netflix', 'recharge'].some(s => lowerRecipient.includes(s))) return 'Bills & Utilities';
-    if (['uber', 'bookmyshow'].some(s => lowerRecipient.includes(s))) return 'Travel & Entertainment';
-    if (['crypto', 'exchange'].some(s => lowerRecipient.includes(s))) return 'Investments';
-    if (['pharmacy', 'medical'].some(s => lowerRecipient.includes(s))) return 'Health';
+    if (['amazon', 'flipkart', 'myntra', 'croma', 'ikea'].some(s => lowerRecipient.includes(s))) return 'Shopping';
+    if (['zomato', 'swiggy', 'bigbasket', 'blinkit', 'cafe'].some(s => lowerRecipient.includes(s))) return 'Food & Groceries';
+    if (['netflix', 'recharge', 'airtel', 'jio', 'adani', 'bill'].some(s => lowerRecipient.includes(s))) return 'Bills & Utilities';
+    if (['uber', 'bookmyshow', 'irctc', 'makemytrip'].some(s => lowerRecipient.includes(s))) return 'Travel & Entertainment';
+    if (['crypto', 'investment', 'exchange'].some(s => lowerRecipient.includes(s))) return 'Investments';
+    if (['pharmacy', 'medical', 'apollo'].some(s => lowerRecipient.includes(s))) return 'Health';
+    if (['gpay', 'paytm', 'phonepe', 'upi'].some(s => lowerRecipient.includes(s))) return 'Transfers';
     return 'Miscellaneous';
 };
 

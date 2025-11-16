@@ -10,7 +10,7 @@ export interface User {
   email: string;
   passwordHash: string;
   status: AccountStatus;
-  faceReferenceImage?: string; // Base64 encoded image
+  faceReferenceImages?: string[]; // Array of Base64 encoded images
   createdAt: string;
   adminNotes?: string[];
 }
@@ -44,12 +44,15 @@ export interface EncryptedBankDetails {
 
 export type TransactionStatus = 'PENDING' | 'APPROVED' | 'BLOCKED_BY_AI' | 'BLOCKED_BY_USER' | 'FLAGGED_BY_USER' | 'CLEARED_BY_ANALYST' | 'ESCALATED';
 
+export type TransactionType = 'UPI' | 'NEFT' | 'IMPS' | 'RTGS';
+
 export interface Transaction {
   id: string;
   userId: string;
   userName: string;
   recipient: string;
   amount: number;
+  type: TransactionType;
   location: {
     latitude: number;
     longitude: number;
