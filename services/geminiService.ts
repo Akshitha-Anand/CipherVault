@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Part } from "@google/genai";
 import { Transaction, RiskAnalysisResult, User, TransactionType } from '../types';
 import { getTransactionsForUser, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT } from './databaseService';
@@ -82,7 +83,8 @@ export const analyzeTransaction = async (
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    // Fix: Using gemini-2.5-pro for complex reasoning tasks like fraud detection.
+    model: "gemini-2.5-pro",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -123,38 +125,38 @@ export const analyzeTransaction = async (
 
 export const verifyFaceWithLiveness = async (
     referenceImages: string[], 
-    liveImage: string, 
+    liveImages: string[], 
     challenge: 'SMILE' | 'BLINK'
 ): Promise<{isSamePerson: boolean; livenessCheckPassed: boolean; reason: string}> => {
   
   const prompt = `
-    You are a sophisticated biometric verification AI. Your task is to perform two checks based on the series of images provided after this text.
+    You are a sophisticated biometric verification AI. Your task is to perform two checks based on the series of images provided.
     The first ${referenceImages.length} images are the user's "Reference Images" on file.
-    The final image is the "Live Capture" for this verification attempt.
+    The subsequent ${liveImages.length} images are a sequence of "Live Capture Frames" from a video feed for this verification attempt.
 
-    1.  **Face Matching**: Compare the "Live Capture" against the "Reference Images". Determine if they belong to the same person. Account for minor variations in lighting, angle, and expression.
-    2.  **Liveness Test**: The user was asked to ${challenge}. Determine if the person in the "Live Capture" image is performing this action.
-        - For a SMILE: Look for upward-curving corners of the mouth and possibly visible teeth. A neutral expression is a failure.
-        - For a BLINK: Look for closed or nearly closed eyelids. Open eyes are a failure.
+    1.  **Face Matching**: Compare the person in the "Live Capture Frames" against the "Reference Images". Determine if they belong to the same person. Account for minor variations in lighting, angle, and expression. The person must be consistent across all live frames.
+    2.  **Liveness Test**: The user was asked to ${challenge}. Analyze the SEQUENCE of "Live Capture Frames" to determine if the person performed this action. Do not judge a single static image; look for a change across the frames.
+        - For a SMILE: Look for a transition from a neutral expression in early frames to a clear smile in later frames. A static smile held from the beginning is a failure.
+        - For a BLINK: Look for a sequence of eye states across the frames, such as open -> closed -> open. If the eyes are open in all frames, or closed in all frames, the test has failed.
 
-    Analyze the images and provide a JSON response with your findings. The 'reason' should be a brief, user-facing explanation for any failure (e.g., "User was not smiling.", "Face does not match our records."). If successful, the reason should be "Verification successful."
+    Analyze the images and provide a JSON response with your findings. The 'reason' should be a brief, user-facing explanation for any failure (e.g., "User did not smile.", "Face does not match our records.", "Blink not detected."). If successful, the reason should be "Verification successful."
   `;
   
-  const imageParts: Part[] = referenceImages.map(img => ({
+  const referenceImageParts: Part[] = referenceImages.map(img => ({
     inlineData: {
       mimeType: 'image/jpeg',
       data: img.split(',')[1], // remove data:image/jpeg;base64,
     },
   }));
 
-  imageParts.push({
+  const liveImageParts: Part[] = liveImages.map(img => ({
      inlineData: {
       mimeType: 'image/jpeg',
-      data: liveImage.split(',')[1],
+      data: img.split(',')[1],
     },
-  });
+  }));
 
-  const parts: Part[] = [{ text: prompt }, ...imageParts];
+  const parts: Part[] = [{ text: prompt }, ...referenceImageParts, ...liveImageParts];
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -170,7 +172,7 @@ export const verifyFaceWithLiveness = async (
           },
           livenessCheckPassed: {
             type: Type.BOOLEAN,
-            description: 'True if the person is performing the requested liveness action (e.g., smiling, blinking).'
+            description: 'True if the person is performing the requested liveness action (e.g., smiling, blinking) as a sequence of movements.'
           },
           reason: {
             type: Type.STRING,

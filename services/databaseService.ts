@@ -413,20 +413,20 @@ export const resolveIncident = async (incidentId: string): Promise<boolean> => {
 // --- BIOMETRIC SIMULATION (AI-POWERED) ---
 
 /**
- * Compares reference images against a live capture using the Gemini service,
- * including a liveness check.
+ * Compares reference images against a sequence of live captures using the Gemini service,
+ * including a motion-based liveness check.
  */
 export const verifyFaceWithAI = async (
     referenceImages: string[], 
-    liveImage: string, 
+    liveImages: string[], 
     challenge: 'SMILE' | 'BLINK'
 ): Promise<{ match: boolean, reason: string }> => {
-    if (!referenceImages || referenceImages.length === 0 || !liveImage) {
-        return { match: false, reason: "Missing reference or live image." };
+    if (!referenceImages || referenceImages.length === 0 || !liveImages || liveImages.length === 0) {
+        return { match: false, reason: "Missing reference or live image sequence." };
     }
 
     try {
-        const result = await verifyFaceWithLiveness(referenceImages, liveImage, challenge);
+        const result = await verifyFaceWithLiveness(referenceImages, liveImages, challenge);
         
         if (!result.isSamePerson) {
             return { match: false, reason: "Face does not match our records." };
