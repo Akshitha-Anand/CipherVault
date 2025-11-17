@@ -1,4 +1,3 @@
-
 import { User, Transaction, RiskAnalysisResult, RiskLevel, LocationStatus } from '../types';
 import databaseService from './databaseService';
 
@@ -126,19 +125,25 @@ const geminiService = {
     referenceImages: string[],
     transaction: Transaction | null = null,
     user: User,
-    simulateSuccess: boolean
+    simulateSuccess: boolean,
+    simulatedGender: 'MALE' | 'FEMALE' | 'OTHER'
   ): Promise<{ match: boolean; reason: string }> => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     if (!referenceImages || referenceImages.length === 0) {
       return { match: false, reason: "No reference images found for this user." };
     }
+    
+    // 1. GENDER MISMATCH CHECK (NEW)
+    if (user.gender !== 'OTHER' && simulatedGender !== 'OTHER' && user.gender !== simulatedGender) {
+        return { match: false, reason: `Match failed with 100% certainty. Obvious gender mismatch detected. User profile is ${user.gender}, simulation was ${simulatedGender}.`};
+    }
 
-    // 1. Determine base confidence threshold
+    // 2. Determine base confidence threshold
     let requiredConfidence = 90.0;
     let reasonForThreshold = `Base threshold: ${requiredConfidence.toFixed(1)}%.`;
 
-    // 2. Adjust threshold based on transaction risk
+    // 3. Adjust threshold based on transaction risk
     if (transaction?.riskLevel === RiskLevel.High) {
       requiredConfidence = 95.0;
       reasonForThreshold = `High-Risk Transaction threshold: ${requiredConfidence.toFixed(1)}%.`;
@@ -147,7 +152,7 @@ const geminiService = {
       reasonForThreshold = `Medium-Risk Transaction threshold: ${requiredConfidence.toFixed(1)}%.`;
     }
 
-    // 3. Adjust threshold for new users
+    // 4. Adjust threshold for new users
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     if (new Date(user.createdAt) > oneWeekAgo) {
       requiredConfidence += 1.5;
@@ -155,7 +160,7 @@ const geminiService = {
     }
     requiredConfidence = Math.min(99.0, requiredConfidence); // Cap it
 
-    // 4. Simulate a deterministic multi-image comparison
+    // 5. Simulate a deterministic multi-image comparison
     const numImages = referenceImages.length;
     let bestScore;
     
@@ -171,7 +176,7 @@ const geminiService = {
 
     bestScore = Math.max(0, parseFloat(bestScore.toFixed(1)));
 
-    // 5. Determine match and create final reason string
+    // 6. Determine match and create final reason string
     const match = bestScore >= requiredConfidence;
     let reason = '';
     if (match) {

@@ -1,4 +1,3 @@
-
 import { v4 as uuidv4 } from 'uuid';
 import { User, BankDetails, Transaction, RiskLevel, ProcessState, AccountHealthStats, UserAnalyticsData, AccountStatus, TransactionStatus, TransactionType, VerificationIncident, Notification, NotificationType, UserBehavioralProfile, TypicalLocation } from '../types.js';
 
@@ -11,7 +10,7 @@ let notifications: Notification[] = [];
 // --- UTILITIES ---
 const hashPassword = (password: string) => `hashed_${password}_${uuidv4()}`;
 const verifyPassword = (password: string, hash: string) => hash.startsWith(`hashed_${password}_`);
-const createNotification = (userId: string, type: NotificationType, message: string, details: { transactionId?: string; } = {}) => {
+const createNotification = (userId: string, type: NotificationType, message: string, details: { transactionId?: string; otpCode?: string; } = {}) => {
     const newNotif: Notification = { 
         id: uuidv4(), 
         userId, 
@@ -20,6 +19,7 @@ const createNotification = (userId: string, type: NotificationType, message: str
         read: false, 
         timestamp: new Date().toISOString(),
         transactionId: details.transactionId,
+        otpCode: details.otpCode,
      };
     notifications.unshift(newNotif);
     console.log(`NOTIFICATION for ${userId}: ${message}`);
@@ -33,6 +33,7 @@ const initMockData = () => {
     const user1: User = {
         id: 'user-001',
         name: 'Alice Johnson',
+        gender: 'FEMALE',
         dob: '1990-05-15',
         mobile: '9876543210',
         email: 'alice@example.com',
@@ -48,6 +49,7 @@ const initMockData = () => {
     const user2: User = {
         id: 'user-002',
         name: 'Bob Williams',
+        gender: 'MALE',
         dob: '1985-11-20',
         mobile: '9988776655',
         email: 'bob@example.com',
@@ -63,6 +65,7 @@ const initMockData = () => {
     const user3: User = {
         id: 'user-003',
         name: 'Charlie Brown',
+        gender: 'MALE',
         dob: '1995-02-10',
         mobile: '9123456789',
         email: 'charlie@example.com',
@@ -140,7 +143,12 @@ const initMockData = () => {
         aiAnalysisLog: ['Medium-high transaction value.', 'Recipient associated with higher chargeback rates.'],
     };
     transactions.unshift(medRiskTx);
-    createNotification(user3.id, NotificationType.MediumRiskAlert, `A transaction of ₹45,000 to Online Gaming Platform requires OTP verification. The mock OTP is 123456.`, { transactionId: medRiskTx.id });
+    createNotification(
+        user3.id, 
+        NotificationType.TransactionOTP, 
+        `Your OTP for the transaction of ₹45,000 to Online Gaming Platform is 123456.`, 
+        { transactionId: medRiskTx.id, otpCode: '123456' }
+    );
 
 
     // --- Verification Incidents ---
@@ -215,9 +223,9 @@ export const createTransaction = (txData: Omit<Transaction, 'id' | 'userName' | 
     } else if (newTransaction.riskLevel === 'MEDIUM') {
         createNotification(
             txData.userId, 
-            NotificationType.MediumRiskAlert, 
-            `A transaction of ₹${txData.amount} to ${txData.recipient} requires OTP verification. The mock OTP is 123456.`, 
-            { transactionId: newTransaction.id }
+            NotificationType.TransactionOTP, 
+            `Your OTP for the transaction of ₹${txData.amount} to ${txData.recipient} is 123456.`, 
+            { transactionId: newTransaction.id, otpCode: '123456' }
         );
     }
 

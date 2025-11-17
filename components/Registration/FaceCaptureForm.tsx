@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CameraIcon, RefreshCwIcon, ShieldCheckIcon, XIcon } from '../icons';
+import { CameraIcon, RefreshCwIcon, ShieldCheckIcon, XIcon, ArrowUpTrayIcon } from '../icons';
 
 interface FaceCaptureFormProps {
   onSubmit: (faceImages: string[]) => void;
@@ -13,6 +13,7 @@ const MIN_IMAGES = 3;
 const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
@@ -62,6 +63,33 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
     const image = canvas.toDataURL('image/jpeg', 0.8);
     setCapturedImages(prev => [...prev, image]);
   };
+  
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+        const files = Array.from(e.target.files);
+        const remainingSlots = MAX_IMAGES - capturedImages.length;
+        if (files.length > remainingSlots) {
+            alert(`You can only upload ${remainingSlots} more image(s).`);
+        }
+        
+        files.slice(0, remainingSlots).forEach(file => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (typeof reader.result === 'string') {
+                    setCapturedImages(prev => [...prev, reader.result as string]);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        // Reset file input to allow selecting the same file again
+        e.target.value = '';
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
 
   const handleDeleteImage = (index: number) => {
     setCapturedImages(prev => prev.filter((_, i) => i !== index));
@@ -76,8 +104,16 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-8 shadow-lg animate-fade-in">
       <canvas ref={canvasRef} className="hidden"></canvas>
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileSelect}
+        className="hidden" 
+        multiple 
+        accept="image/png, image/jpeg"
+      />
       <h2 className="text-2xl font-semibold mb-2 text-cyan-300">Biometric Setup</h2>
-      <p className="text-gray-400 mb-6">Capture at least {MIN_IMAGES} clear photos of your face for accurate verification.</p>
+      <p className="text-gray-400 mb-6">Capture or upload at least {MIN_IMAGES} clear photos of your face.</p>
       
       <div className="w-full aspect-square bg-gray-900 rounded-md flex items-center justify-center overflow-hidden relative">
         {error ? (
@@ -92,16 +128,29 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="grid grid-cols-2 gap-4 mt-4">
         <button 
           onClick={handleCapture} 
           disabled={!!error || !stream || isLoading || capturedImages.length >= MAX_IMAGES} 
           className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           <CameraIcon className="mr-2 w-5 h-5" /> 
-          {capturedImages.length >= MAX_IMAGES ? `Limit Reached (${MAX_IMAGES})` : `Capture Photo (${capturedImages.length}/${MAX_IMAGES})`}
+          Capture
+        </button>
+        <button 
+          type="button"
+          onClick={triggerFileUpload}
+          disabled={isLoading || capturedImages.length >= MAX_IMAGES}
+          className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-600 text-base font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed"
+        >
+          <ArrowUpTrayIcon className="mr-2 w-5 h-5" />
+          Upload
         </button>
       </div>
+       <p className="text-center text-gray-400 text-xs mt-2">
+            {capturedImages.length} of {MAX_IMAGES} images added.
+        </p>
+
 
       {capturedImages.length > 0 && (
         <div className="mt-4">
@@ -109,7 +158,7 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
           <div className="grid grid-cols-5 gap-2">
             {capturedImages.map((img, i) => (
               <div key={i} className="relative group">
-                <img src={img} alt={`Capture ${i+1}`} className="w-full h-full object-cover rounded-md" />
+                <img src={img} alt={`Capture ${i+1}`} className="w-full h-full object-cover rounded-md aspect-square" />
                 <button 
                   onClick={() => handleDeleteImage(i)}
                   className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -134,7 +183,7 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
         </button>
         {capturedImages.length < MIN_IMAGES && (
             <p className="text-center text-yellow-400 text-xs mt-2">
-                Please capture at least {MIN_IMAGES - capturedImages.length} more photo(s).
+                Please add at least {MIN_IMAGES - capturedImages.length} more photo(s).
             </p>
         )}
       </div>

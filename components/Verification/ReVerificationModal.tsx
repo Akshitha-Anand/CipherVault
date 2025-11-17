@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, UserCheckIcon, ProcessingSpinner } from '../icons';
 import { User } from '../../types';
@@ -24,6 +23,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
   const [verificationMessage, setVerificationMessage] = useState<string>('');
   const verificationStepIntervalRef = useRef<number | null>(null);
   const [simulateSuccess, setSimulateSuccess] = useState(true);
+  const [simulatedGender, setSimulatedGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>(user.gender);
 
   useEffect(() => {
     if (isOpen) {
@@ -32,6 +32,8 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
       setFailureReason('');
       setVerificationMessage('');
       setSimulateSuccess(true);
+      setSimulatedGender(user.gender);
+
 
       const startCamera = async () => {
         try {
@@ -64,7 +66,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
           window.clearInterval(verificationStepIntervalRef.current);
       }
     };
-  }, [isOpen]);
+  }, [isOpen, user.gender]);
   
   const captureFrame = (): string | null => {
       if (!videoRef.current || !canvasRef.current) return null;
@@ -121,7 +123,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
     }
     
     try {
-        const result = await geminiService.verifyFaceSimilarity(liveImage, user.faceReferenceImages || [], null, user, simulateSuccess);
+        const result = await geminiService.verifyFaceSimilarity(liveImage, user.faceReferenceImages || [], null, user, simulateSuccess, simulatedGender);
         
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
         
@@ -189,11 +191,24 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
                             )}
                         </div>
 
-                        <div className="mt-4 flex items-center justify-center gap-4">
-                            <label htmlFor="reverifySimulateToggle" className="text-sm text-gray-400 cursor-pointer">I am the legitimate user</label>
-                            <div className="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="reverifySimulateToggle" className="sr-only peer" checked={simulateSuccess} onChange={() => setSimulateSuccess(!simulateSuccess)} />
-                                <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                         <div className="mt-4 grid grid-cols-2 gap-4 items-center">
+                            <div className="flex flex-col items-center">
+                                <label htmlFor="reverifySimulateToggle" className="text-sm text-gray-400 cursor-pointer mb-1">I am the legitimate user</label>
+                                <div className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="reverifySimulateToggle" className="sr-only peer" checked={simulateSuccess} onChange={() => setSimulateSuccess(!simulateSuccess)} />
+                                    <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                                </div>
+                            </div>
+                             <div>
+                                <label htmlFor="reverifySimGender" className="block text-sm text-gray-400 mb-1 text-center">Simulating as:</label>
+                                <select
+                                  id="reverifySimGender" value={simulatedGender} onChange={(e) => setSimulatedGender(e.target.value as 'MALE' | 'FEMALE' | 'OTHER')}
+                                  className="block w-full bg-gray-700/50 border border-gray-600 rounded-md shadow-sm py-1 px-2 text-sm text-white focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+                                >
+                                  <option value="MALE">Male</option>
+                                  <option value="FEMALE">Female</option>
+                                  <option value="OTHER">Other</option>
+                                </select>
                             </div>
                         </div>
                         

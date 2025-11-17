@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Notification, NotificationType } from '../types';
 import databaseService from '../services/databaseService';
-import { BellIcon, ArrowRightIcon, ShieldAlertIcon, ShieldXIcon, UserCheckIcon, ShieldQuestionIcon } from '../components/icons';
+import { BellIcon, ArrowRightIcon, ShieldAlertIcon, ShieldXIcon, UserCheckIcon, ShieldQuestionIcon, MessageSquareIcon } from '../components/icons';
 
 interface NotificationsPageProps {
   user: User;
@@ -13,8 +12,8 @@ const NotificationIcon: React.FC<{ type: NotificationType }> = ({ type }) => {
     switch (type) {
         case NotificationType.HighRiskTransaction:
             return <ShieldAlertIcon className="w-6 h-6 text-orange-400" />;
-        case NotificationType.MediumRiskAlert:
-             return <ShieldQuestionIcon className="w-6 h-6 text-yellow-400" />;
+        case NotificationType.TransactionOTP:
+             return <MessageSquareIcon className="w-6 h-6 text-cyan-400" />;
         case NotificationType.AccountBlocked:
             return <ShieldXIcon className="w-6 h-6 text-red-400" />;
         case NotificationType.AccountUnblocked:
@@ -75,6 +74,11 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ user, onNavigateB
                                     </div>
                                     <div className="flex-grow">
                                         <p className="text-gray-200">{notif.message}</p>
+                                        {notif.type === NotificationType.TransactionOTP && notif.otpCode && (
+                                            <p className="mt-2 text-lg font-mono tracking-widest text-cyan-300 bg-gray-900/50 p-2 rounded-md text-center">
+                                                {notif.otpCode}
+                                            </p>
+                                        )}
                                         <p className="text-xs text-gray-500 mt-1">{new Date(notif.timestamp).toLocaleString()}</p>
                                     </div>
                                 </li>

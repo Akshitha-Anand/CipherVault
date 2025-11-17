@@ -5,6 +5,7 @@ export type AccountStatus = 'ACTIVE' | 'BLOCKED' | 'UNDER_REVIEW';
 export interface User {
   id: string;
   name: string;
+  gender: 'MALE' | 'FEMALE' | 'OTHER';
   dob: string;
   mobile: string;
   email: string;
@@ -131,7 +132,7 @@ export enum NotificationType {
     AccountBlocked = 'ACCOUNT_BLOCKED',
     AccountUnblocked = 'ACCOUNT_UNBLOCKED',
     AccountUnderReview = 'ACCOUNT_UNDER_REVIEW',
-    MediumRiskAlert = 'MEDIUM_RISK_ALERT',
+    TransactionOTP = 'TRANSACTION_OTP',
 }
 
 export interface Notification {
@@ -142,6 +143,7 @@ export interface Notification {
     timestamp: string;
     read: boolean;
     transactionId?: string;
+    otpCode?: string;
 }
 
 export interface TypicalLocation {

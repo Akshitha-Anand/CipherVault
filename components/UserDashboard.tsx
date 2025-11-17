@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction, UserAnalyticsData, AccountStatus, TransactionType, LocationStatus } from '../types';
 import databaseService from '../services/databaseService';
@@ -63,6 +62,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
 
   const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
   const [transactionToConfirm, setTransactionToConfirm] = useState<Omit<Transaction, 'id' | 'riskLevel' | 'riskScore' | 'status' | 'aiAnalysisLog' | 'userName'> | null>(null);
+  const [isOtpModalVisible, setIsOtpModalVisible] = useState(false);
 
   const statusStyles: Record<AccountStatus, string> = {
     ACTIVE: 'bg-green-500/20 text-green-300 border border-green-500/30',
@@ -130,6 +130,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
             break;
         case RiskLevel.Medium:
             setProcessState(ProcessState.VerificationOTP);
+            setIsOtpModalVisible(true);
             break;
         case RiskLevel.High:
             setProcessState(ProcessState.VerificationBiometric);
@@ -178,6 +179,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
   }, [debouncedAmount, recipient, handleAnalysis]);
   
   const handleBlockTransaction = async () => {
+    setIsOtpModalVisible(false);
     setProcessState(ProcessState.Blocked);
     if(currentTransaction){
         await databaseService.updateTransactionStatus(currentTransaction.id, 'BLOCKED_BY_USER');
@@ -185,6 +187,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
   };
   
   const handleVerificationSuccess = async () => {
+      setIsOtpModalVisible(false);
       setProcessState(ProcessState.Approved);
       if(currentTransaction){
           await databaseService.updateTransactionStatus(currentTransaction.id, 'APPROVED');
@@ -207,6 +210,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
     setAnalysisResult(null);
     setCurrentTransaction(null);
     setError(null);
+    setIsOtpModalVisible(false);
   }, [onTransactionComplete, fetchTransactionTotals, type]);
 
   const isFinalState = processState === ProcessState.Approved || processState === ProcessState.Blocked;
@@ -243,7 +247,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
       if(error) return <div className="text-red-400 font-semibold">{error}</div>
       if(processState === ProcessState.Approved) return <div className="text-green-400 font-semibold">Transaction Approved</div>
       if(processState === ProcessState.Blocked) return <div className="text-red-400 font-semibold">Transaction Blocked & Notified</div>
-      if(processState === ProcessState.VerificationOTP) return <div className="text-yellow-400 font-semibold flex items-center justify-center gap-2"><ShieldQuestionIcon className="w-4 h-4" /> Awaiting OTP Verification...</div>
+      if(processState === ProcessState.VerificationOTP) {
+        if (isOtpModalVisible) {
+           return <div className="text-yellow-400 font-semibold flex items-center justify-center gap-2"><ShieldQuestionIcon className="w-4 h-4" /> Awaiting OTP Verification...</div>
+        } else {
+           return (
+             <button onClick={() => setIsOtpModalVisible(true)} className="w-full text-center text-yellow-400 font-semibold hover:text-yellow-300 transition-colors">
+                Verification pending. Click to enter code.
+            </button>
+           );
+        }
+      }
       if(processState === ProcessState.VerificationBiometric) return <div className="text-yellow-400 font-semibold">Face Verification Required</div>
       if(isConfirmationModalOpen) return <div className="text-yellow-400 font-semibold">Awaiting Confirmation</div>
       if(processState === ProcessState.Analyzing) return <div className="text-cyan-400 animate-pulse">Analyzing...</div>
@@ -422,10 +436,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
       </div>
 
       <OtpModal
-        isOpen={processState === ProcessState.VerificationOTP}
+        isOpen={isOtpModalVisible}
         transaction={currentTransaction}
         onBlock={handleBlockTransaction}
         onSuccess={handleVerificationSuccess}
+        onMinimize={() => setIsOtpModalVisible(false)}
       />
       <FaceVerificationModal
         isOpen={processState === ProcessState.VerificationBiometric}

@@ -1,4 +1,3 @@
-
 import React, { useState, FormEvent } from 'react';
 import { User } from '../../types';
 import { ArrowRightIcon } from '../icons';
@@ -16,7 +15,9 @@ const PersonalDetailsForm: React.FC<PersonalDetailsFormProps> = ({ onSubmit, api
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>('MALE');
   const [passwordError, setPasswordError] = useState('');
+  const [mobileError, setMobileError] = useState('');
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -29,11 +30,21 @@ const PersonalDetailsForm: React.FC<PersonalDetailsFormProps> = ({ onSubmit, api
       return;
     }
     setPasswordError('');
-    onSubmit({ name, dob, mobile, email, password });
+    onSubmit({ name, dob, mobile, email, password, gender });
   };
   
-  const isFormComplete = name && dob && mobile && email && password && confirmPassword;
-  const isSubmitDisabled = !isFormComplete || isLoading;
+  const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const numericValue = e.target.value.replace(/[^\d]/g, '').slice(0, 10);
+    setMobile(numericValue);
+    if (numericValue.length > 0 && numericValue.length < 10) {
+        setMobileError('Mobile number must be 10 digits.');
+    } else {
+        setMobileError('');
+    }
+  };
+
+  const isFormComplete = name && dob && mobile.length === 10 && email && password && confirmPassword && gender;
+  const isSubmitDisabled = !isFormComplete || isLoading || !!mobileError || !!passwordError;
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-8 shadow-lg animate-fade-in">
@@ -62,21 +73,38 @@ const PersonalDetailsForm: React.FC<PersonalDetailsFormProps> = ({ onSubmit, api
           <div>
             <label htmlFor="mobile" className="block text-sm font-medium text-gray-300">Mobile Number</label>
             <input
-              type="tel" id="mobile" value={mobile} onChange={(e) => setMobile(e.target.value)}
+              type="tel" id="mobile" value={mobile} onChange={handleMobileChange}
               className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
               required
               autoComplete="tel"
+              pattern="\d{10}"
+              title="Mobile number must be 10 digits."
             />
+             {mobileError && <p className="text-red-400 text-xs mt-1">{mobileError}</p>}
           </div>
         </div>
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-300">Email Address</label>
-          <input
-            type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
-            required
-            autoComplete="email"
-          />
+        <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300">Email Address</label>
+              <input
+                type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+                required
+                autoComplete="email"
+              />
+            </div>
+             <div>
+                <label htmlFor="gender" className="block text-sm font-medium text-gray-300">Gender</label>
+                <select
+                    id="gender" value={gender} onChange={(e) => setGender(e.target.value as 'MALE' | 'FEMALE' | 'OTHER')}
+                    className="mt-1 block w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
+                    required
+                >
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="OTHER">Other</option>
+                </select>
+            </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

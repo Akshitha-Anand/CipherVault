@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, FormEvent, useCallback } from 'react';
 import { ShieldQuestionIcon, MessageSquareIcon } from '../icons';
 import { Transaction } from '../../types';
@@ -9,11 +8,12 @@ interface OtpModalProps {
   transaction: Transaction | null;
   onBlock: () => void;
   onSuccess: () => void;
+  onMinimize: () => void;
 }
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
-const OtpModal: React.FC<OtpModalProps> = ({ isOpen, transaction, onBlock, onSuccess }) => {
+const OtpModal: React.FC<OtpModalProps> = ({ isOpen, transaction, onBlock, onSuccess, onMinimize }) => {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -83,7 +83,7 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, transaction, onBlock, onSuc
         <div className="text-center">
             <ShieldQuestionIcon className="mx-auto w-12 h-12 text-yellow-400 mb-4" />
             <h2 className="text-2xl font-bold text-yellow-400">OTP Verification Required</h2>
-            <p className="text-gray-300 mt-2">A code has been sent via notification. Please enter it below to complete your transaction.</p>
+            <p className="text-gray-300 mt-2">Check your notifications for the code to complete your transaction.</p>
         </div>
         <form onSubmit={handleSubmit} className="mt-6">
             <div className="relative">
@@ -114,10 +114,15 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, transaction, onBlock, onSuc
                     </button>
                 )}
             </div>
-
-            <button type="submit" disabled={isLoading || !!error} className="mt-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-gray-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">
-                {isLoading ? 'Verifying...' : 'Verify Transaction'}
-            </button>
+            
+            <div className="mt-4 space-y-2">
+                <button type="submit" disabled={isLoading || !!error} className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-gray-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isLoading ? 'Verifying...' : 'Verify Transaction'}
+                </button>
+                 <button type="button" onClick={onMinimize} className="w-full text-center text-sm text-gray-400 hover:text-white py-2 rounded-md hover:bg-gray-700/50 transition-colors">
+                    Minimize
+                </button>
+            </div>
         </form>
       </div>
     </div>
