@@ -382,13 +382,15 @@ export const createVerificationIncident = async (userId: string, userName: strin
 export const getPendingIncidents = async (): Promise<VerificationIncident[]> => {
     return db.verificationIncidents
         .filter(inc => inc.status === 'PENDING_REVIEW')
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.time).getTime());
+        // FIX: Use `a.timestamp` for sorting instead of `a.time` which does not exist on the type.
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
 
 export const getEscalatedIncidents = async (): Promise<VerificationIncident[]> => {
      return db.verificationIncidents
         .filter(inc => inc.status === 'ESCALATED')
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.time).getTime());
+        // FIX: Use `a.timestamp` for sorting instead of `a.time` which does not exist on the type.
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
 
 export const escalateIncident = async (incidentId: string): Promise<boolean> => {
@@ -418,7 +420,7 @@ export const resolveIncident = async (incidentId: string): Promise<boolean> => {
 // FIX: Updated function signature to accept a single live image string instead of an array.
 export const verifyFaceWithAI = async (
     referenceImages: string[], 
-    liveImage: string,
+    liveImage: string
 ): Promise<{ match: boolean, reason: string }> => {
     // FIX: Updated guard clause for single live image.
     if (!referenceImages || referenceImages.length === 0 || !liveImage) {
@@ -438,7 +440,7 @@ export const verifyFaceWithAI = async (
 
     } catch (error) {
         console.error("AI Face Verification failed", error);
-        return { match: false, reason: "A system error occurred during verification." };
+        return { match: false, reason: "Could not complete verification due to a system error." };
     }
 };
 

@@ -1,6 +1,7 @@
 
 
 
+
 import { GoogleGenAI, Type, Part } from "@google/genai";
 import { Transaction, RiskAnalysisResult, User, TransactionType } from '../types';
 import { getTransactionsForUser, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT } from './databaseService';
@@ -111,7 +112,8 @@ export const analyzeTransaction = async (
   const response = await ai.models.generateContent({
     // OPTIMIZATION: Switched to gemini-2.5-flash for faster, real-time transaction analysis.
     model: "gemini-2.5-flash",
-    contents: [{ parts: [{ text: prompt }] }],
+    // @google/genai-sdk: FIX - Simplified `contents` for simple text prompts.
+    contents: prompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -134,7 +136,7 @@ export const analyzeTransaction = async (
     }
   });
 
-  // @google/genai-sdk: Use response.text to access response, fixing "not callable" error
+  // @google/genai-sdk: FIX - Use response.text to access response, fixing "not callable" error
   const jsonString = response.text;
   
   if (!jsonString) {
@@ -216,7 +218,7 @@ export const verifyFaceSimilarity = async (
     }
   });
 
-  // @google/genai-sdk: Use response.text to access response, fixing "not callable" error
+  // @google/genai-sdk: FIX - Use response.text to access response, fixing "not callable" error
   const jsonString = response.text;
   if (!jsonString) {
     throw new Error("Received empty response from Gemini API for face verification.");

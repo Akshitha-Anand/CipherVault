@@ -349,7 +349,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                         disabled={isFinalState || user.status === 'BLOCKED'}
                       />
                       <button onClick={() => setIsScannerOpen(true)} className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-cyan-400"  disabled={isFinalState || user.status === 'BLOCKED'}>
-                        <QrCodeIcon className="h-5 w-5" />
+                        <QrCodeIcon className="w-5 w-5" />
                       </button>
                     </div>
                   </div>

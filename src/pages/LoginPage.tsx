@@ -34,7 +34,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToRegister }) =>
   };
 
   const handleForgotPassword = () => {
-    alert("Password reset functionality is not yet implemented.");
+    alert("Password reset functionality is currently under development.");
   };
 
   return (
@@ -58,7 +58,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToRegister }) =>
               </div>
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">Password</label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300">Password</label>
+                <div className="text-sm">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="font-medium text-cyan-400 hover:text-cyan-300"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              </div>
               <div className="mt-1 relative">
                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                       <LockIcon className="h-5 w-5 text-gray-400" />
@@ -70,16 +81,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToRegister }) =>
                       autoComplete="current-password"
                   />
               </div>
-            </div>
-
-            <div className="flex items-center justify-end text-sm">
-                <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    className="font-medium text-cyan-400 hover:text-cyan-300"
-                >
-                    Forgot password?
-                </button>
             </div>
             
             {error && <p className="text-red-400 text-sm text-center">{error}</p>}
