@@ -68,6 +68,9 @@ const BlockedAccountsManager: React.FC = () => {
                                 <div>
                                     <p className="font-semibold text-white">{user.name}</p>
                                     <p className="text-xs text-gray-500">{user.email}</p>
+                                    <p className="text-xs text-gray-500 mt-1 italic">
+                                        Last note: {user.adminNotes?.[user.adminNotes.length - 1]?.split(': ')[1] || 'No notes'}
+                                    </p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button

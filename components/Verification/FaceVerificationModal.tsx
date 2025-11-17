@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, ProcessingSpinner } from '../icons';
 import { User } from '../../types';
@@ -73,45 +74,33 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
       if (!videoRef.current || !canvasRef.current) return null;
       
       const video = videoRef.current;
-      const mainCanvas = canvasRef.current;
-      mainCanvas.width = video.videoWidth;
-      mainCanvas.height = video.videoHeight;
-      const mainContext = mainCanvas.getContext('2d');
-
-      if (!mainContext) return null;
-      
-      // Draw mirrored video to main canvas
-      mainContext.translate(mainCanvas.width, 0);
-      mainContext.scale(-1, 1);
-      mainContext.drawImage(video, 0, 0, mainCanvas.width, mainCanvas.height);
-      mainContext.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-
-      // --- RESIZING LOGIC ---
+      const canvas = canvasRef.current;
       const MAX_DIMENSION = 512;
-      let targetWidth = mainCanvas.width;
-      let targetHeight = mainCanvas.height;
+      let { videoWidth, videoHeight } = video;
 
-      if (targetWidth > MAX_DIMENSION || targetHeight > MAX_DIMENSION) {
-        if (targetWidth > targetHeight) {
-          targetHeight = Math.round(targetHeight * (MAX_DIMENSION / targetWidth));
-          targetWidth = MAX_DIMENSION;
-        } else {
-          targetWidth = Math.round(targetWidth * (MAX_DIMENSION / targetHeight));
-          targetHeight = MAX_DIMENSION;
-        }
+      const aspectRatio = videoWidth / videoHeight;
+
+      let targetWidth, targetHeight;
+      if (videoWidth > videoHeight) {
+          targetWidth = Math.min(videoWidth, MAX_DIMENSION);
+          targetHeight = targetWidth / aspectRatio;
+      } else {
+          targetHeight = Math.min(videoHeight, MAX_DIMENSION);
+          targetWidth = targetHeight * aspectRatio;
       }
 
-      // Use an offscreen canvas for resizing
-      const resizeCanvas = document.createElement('canvas');
-      resizeCanvas.width = targetWidth;
-      resizeCanvas.height = targetHeight;
-      const resizeContext = resizeCanvas.getContext('2d');
-      
-      if (!resizeContext) return null;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext('2d');
+      if (!context) return null;
 
-      resizeContext.drawImage(mainCanvas, 0, 0, targetWidth, targetHeight);
+      // Flip the image horizontally for a mirror effect
+      context.translate(targetWidth, 0);
+      context.scale(-1, 1);
+      context.drawImage(video, 0, 0, targetWidth, targetHeight);
+      context.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
       
-      return resizeCanvas.toDataURL('image/jpeg', 0.8);
+      return canvas.toDataURL('image/jpeg', 0.8);
   }
 
   const handleVerify = async () => {
@@ -119,7 +108,7 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
         const reason = "No reference face data. Transaction cannot be verified.";
         setFailureReason(reason);
         setStatus('FAILED');
-        setTimeout(() => onClose(), 3000); // Close modal, which flags transaction
+        setTimeout(() => onFailure(''), 2000); // Trigger failure, no image to provide
         return;
     }
 

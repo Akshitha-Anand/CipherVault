@@ -1,5 +1,5 @@
 import db from '../database/mockDatabase';
-import { User, BankDetails, Transaction, EncryptedBankDetails, AccountStatus, TransactionStatus, RiskLevel, EncryptedData, VerificationIncident, UserAnalyticsData, TransactionType } from '../types';
+import { User, BankDetails, Transaction, EncryptedBankDetails, AccountStatus, TransactionStatus, RiskLevel, EncryptedData, VerificationIncident, UserAnalyticsData, TransactionType, Notification, NotificationType } from '../types';
 import { verifyFaceSimilarity } from './geminiService';
 
 // --- CONSTANTS ---
@@ -128,6 +128,62 @@ const decrypt = async (encryptedData: EncryptedData): Promise<string> => {
 };
 
 
+// --- NOTIFICATION MANAGEMENT ---
+
+export const createNotification = async (userId: string, type: NotificationType, details: Record<string, any> = {}): Promise<Notification | null> => {
+    const user = await getUser(userId);
+    if (!user) return null;
+
+    let message = '';
+    switch (type) {
+        case NotificationType.HighRiskTransaction:
+            message = `High-risk transaction detected: ₹${details.amount?.toLocaleString('en-IN')} to ${details.recipient}. Please review.`;
+            break;
+        case NotificationType.AccountBlocked:
+            message = "Your account has been blocked for security reasons. Please contact support.";
+            break;
+        case NotificationType.AccountUnblocked:
+            message = "Your account has been successfully re-activated. You can now transact securely.";
+            break;
+        case NotificationType.AccountUnderReview:
+            message = "Your account is under review due to unusual activity. Our team will contact you shortly.";
+            break;
+        default:
+            message = "You have a new notification.";
+    }
+    
+    console.log(`SIMULATING NOTIFICATION for ${userId}: ${message}`); // Simulate push/email
+
+    const newNotification: Notification = {
+        id: `notif-${Date.now()}`,
+        userId,
+        type,
+        message,
+        timestamp: new Date().toISOString(),
+        read: false,
+        details,
+    };
+
+    db.notifications.unshift(newNotification);
+    return newNotification;
+};
+
+export const getNotificationsForUser = async (userId: string): Promise<Notification[]> => {
+    return db.notifications
+        .filter(n => n.userId === userId)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+};
+
+export const markNotificationsAsRead = async (userId: string, notificationIds: string[]): Promise<boolean> => {
+    db.notifications.forEach(n => {
+        if (n.userId === userId && notificationIds.includes(n.id)) {
+            n.read = true;
+        }
+    });
+    return true;
+};
+
+
 // --- USER MANAGEMENT ---
 
 export const addUser = async (userData: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string, faceReferenceImages: string[] }): Promise<User> => {
@@ -177,7 +233,20 @@ export const getAllUsers = async (): Promise<User[]> => {
 export const updateUserStatus = async (userId: string, status: AccountStatus): Promise<boolean> => {
     const user = db.users.find(u => u.id === userId);
     if (user) {
+        const oldStatus = user.status;
+        if (oldStatus === status) return true; // No change
+
         user.status = status;
+
+        // Notification Logic
+        if (status === 'BLOCKED') {
+            await createNotification(userId, NotificationType.AccountBlocked);
+        } else if (status === 'ACTIVE' && oldStatus === 'BLOCKED') {
+            await createNotification(userId, NotificationType.AccountUnblocked);
+        } else if (status === 'UNDER_REVIEW') {
+            await createNotification(userId, NotificationType.AccountUnderReview);
+        }
+
         return true;
     }
     return false;

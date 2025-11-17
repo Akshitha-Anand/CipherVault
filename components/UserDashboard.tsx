@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction, UserAnalyticsData, AccountStatus, TransactionType } from '../types';
+import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction, UserAnalyticsData, AccountStatus, TransactionType, NotificationType } from '../types';
 import { analyzeTransaction } from '../services/geminiService';
-import { addTransaction, updateTransactionStatus, getUserDailyTransactionTotal, getUserWeeklyTransactionTotal, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT } from '../services/databaseService';
+import { addTransaction, updateTransactionStatus, getUserDailyTransactionTotal, getUserWeeklyTransactionTotal, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT, createNotification } from '../services/databaseService';
 import { useDebounce } from '../hooks/useDebounce';
 import { CheckCircle2, CpuIcon, AlertTriangleIcon, UserIcon, ThumbsUpIcon, ThumbsDownIcon, HandIcon, ShieldXIcon, ShieldQuestionIcon, QrCodeIcon, InfoIcon } from './icons';
 import OtpModal from './Verification/OtpModal';
@@ -138,6 +138,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
         aiAnalysisLog: result.analysis,
       });
       setCurrentTransaction(newTransaction);
+
+      if (riskLevel === RiskLevel.High || riskLevel === RiskLevel.Critical) {
+          await createNotification(user.id, NotificationType.HighRiskTransaction, {
+              amount: newTransaction.amount,
+              recipient: newTransaction.recipient,
+              transactionId: newTransaction.id,
+          });
+      }
 
       if (riskLevel === RiskLevel.Low) {
         setProcessState(ProcessState.Approved);
@@ -349,7 +357,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                         disabled={isFinalState || user.status === 'BLOCKED'}
                       />
                       <button onClick={() => setIsScannerOpen(true)} className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-cyan-400"  disabled={isFinalState || user.status === 'BLOCKED'}>
-                        <QrCodeIcon className="h-5 w-5" />
+                        <QrCodeIcon className="w-5 w-5" />
                       </button>
                     </div>
                   </div>

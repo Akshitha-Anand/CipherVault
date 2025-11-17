@@ -118,3 +118,20 @@ export interface VerificationIncident {
   capturedImage: string; // Base64 of the failed attempt
   status: VerificationIncidentStatus;
 }
+
+export enum NotificationType {
+    HighRiskTransaction = 'HIGH_RISK_TRANSACTION',
+    AccountBlocked = 'ACCOUNT_BLOCKED',
+    AccountUnblocked = 'ACCOUNT_UNBLOCKED',
+    AccountUnderReview = 'ACCOUNT_UNDER_REVIEW',
+}
+
+export interface Notification {
+    id: string;
+    userId: string;
+    message: string;
+    type: NotificationType;
+    timestamp: string;
+    read: boolean;
+    details?: Record<string, any>;
+}

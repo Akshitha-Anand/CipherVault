@@ -1,7 +1,4 @@
 
-
-
-
 import { GoogleGenAI, Type, Part } from "@google/genai";
 import { Transaction, RiskAnalysisResult, User, TransactionType } from '../types';
 import { getTransactionsForUser, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT } from './databaseService';
@@ -108,11 +105,8 @@ export const analyzeTransaction = async (
     Based on this logic, calculate a final risk score and provide a step-by-step analysis log explaining your reasoning based on the principles above. Each item in the 'analysis' array must be a single, concise sentence without any newline characters.
   `;
 
-  // @google/genai-sdk: Use modern ai.models.generateContent API
   const response = await ai.models.generateContent({
-    // OPTIMIZATION: Switched to gemini-2.5-flash for faster, real-time transaction analysis.
     model: "gemini-2.5-flash",
-    // @google/genai-sdk: FIX - Simplified `contents` for simple text prompts.
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -136,7 +130,7 @@ export const analyzeTransaction = async (
     }
   });
 
-  // @google/genai-sdk: FIX - Use response.text to access response, fixing "not callable" error
+  // FIX: Use the .text property to access the response content, instead of calling it as a function.
   const jsonString = response.text;
   
   if (!jsonString) {
@@ -195,7 +189,6 @@ export const verifyFaceSimilarity = async (
       liveImagePart
   ];
 
-  // @google/genai-sdk: Use modern ai.models.generateContent API
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: { parts },
@@ -218,7 +211,7 @@ export const verifyFaceSimilarity = async (
     }
   });
 
-  // @google/genai-sdk: FIX - Use response.text to access response, fixing "not callable" error
+  // FIX: Use the .text property to access the response content, instead of calling it as a function.
   const jsonString = response.text;
   if (!jsonString) {
     throw new Error("Received empty response from Gemini API for face verification.");

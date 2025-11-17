@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { ShieldQuestionIcon, MessageSquareIcon } from '../icons';
 
 interface OtpModalProps {
@@ -7,9 +7,53 @@ interface OtpModalProps {
   onSuccess: () => void;
 }
 
+const RESEND_COOLDOWN_SECONDS = 30;
+
 const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Reset state when modal opens
+      setOtp('');
+      setError('');
+      setResendCooldown(RESEND_COOLDOWN_SECONDS); // Start cooldown immediately
+      
+      // Clear any existing timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      
+      // Start a new countdown timer
+      timerRef.current = window.setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!);
+            timerRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+    } else {
+      // Cleanup on close
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    // Cleanup on unmount
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [isOpen]);
+
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -20,6 +64,27 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
       setError('Invalid OTP. Please enter the 6-digit code.');
     }
   };
+
+  const handleResend = () => {
+      if (resendCooldown > 0) return; // Prevent resending during cooldown
+
+      // Simulate resending OTP
+      console.log("Resending OTP...");
+      
+      // Reset cooldown timer
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      timerRef.current = window.setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!);
+            timerRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+  };
+
 
   if (!isOpen) return null;
 
@@ -47,7 +112,21 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
                 />
             </div>
             {error && <p className="text-red-400 text-sm mt-2 text-center">{error}</p>}
-            <button type="submit" className="mt-6 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-gray-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-gray-900">
+            
+            <div className="mt-4 text-center text-sm text-gray-400">
+                Didn't receive code?{' '}
+                {resendCooldown > 0 ? (
+                    <span className="text-gray-500">
+                        Resend in {resendCooldown}s
+                    </span>
+                ) : (
+                    <button type="button" onClick={handleResend} className="font-medium text-cyan-400 hover:text-cyan-300 underline">
+                        Resend OTP
+                    </button>
+                )}
+            </div>
+
+            <button type="submit" className="mt-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-gray-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-gray-900">
                 Verify Transaction
             </button>
         </form>

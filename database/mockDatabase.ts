@@ -1,10 +1,11 @@
-import { User, EncryptedBankDetails, Transaction, RiskLevel, VerificationIncident } from '../types';
+import { User, EncryptedBankDetails, Transaction, RiskLevel, VerificationIncident, Notification } from '../types';
 
 interface Database {
     users: User[];
     bankDetails: EncryptedBankDetails[];
     transactions: Transaction[];
     verificationIncidents: VerificationIncident[];
+    notifications: Notification[];
 }
 
 const generatePastDate = (daysAgo: number, hour?: number, minute?: number) => {
@@ -107,7 +108,8 @@ const db: Database = {
             timestamp: generatePastDate(2, 3, 45), // Occurred 2 days ago at 3:45 AM
             status: 'PENDING_REVIEW'
         }
-    ]
+    ],
+    notifications: []
 };
 
 export default db;
