@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, AccountHealthStats, Transaction, UserAnalyticsData } from '../types';
 import UserDashboard from '../components/UserDashboard';
-import { getTransactionsForUser, getUser, createVerificationIncident, calculateAccountStabilityScore, getUserAnalytics } from '../services/databaseService';
+import { getTransactionsForUser, getUser, createVerificationIncident, calculateAccountStabilityScore, getUserAnalytics, updateTransactionStatus } from '../services/databaseService';
 
 interface UserPageProps {
   user: User;
@@ -59,6 +59,7 @@ export default function UserPage({ user: initialUser }: UserPageProps) {
   }
 
   const handleVerificationFailure = async (transaction: Transaction, capturedImage: string) => {
+      await updateTransactionStatus(transaction.id, 'BLOCKED_BY_AI');
       await createVerificationIncident(transaction.userId, transaction.userName, capturedImage);
       // Re-fetch everything to show the updated "BLOCKED" status
       if(currentUser){

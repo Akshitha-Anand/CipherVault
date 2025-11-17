@@ -4,13 +4,12 @@ import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, 
 import { analyzeTransaction } from '../services/geminiService';
 import { addTransaction, updateTransactionStatus, getUserDailyTransactionTotal, getUserWeeklyTransactionTotal, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT } from '../services/databaseService';
 import { useDebounce } from '../hooks/useDebounce';
-import { CheckCircle2, CpuIcon, AlertTriangleIcon, UserIcon, ThumbsUpIcon, ThumbsDownIcon, HandIcon, ShieldXIcon, ShieldQuestionIcon, QrCodeIcon, InfoIcon, UserCheckIcon } from './icons';
+import { CheckCircle2, CpuIcon, AlertTriangleIcon, UserIcon, ThumbsUpIcon, ThumbsDownIcon, HandIcon, ShieldXIcon, ShieldQuestionIcon, QrCodeIcon, InfoIcon } from './icons';
 import OtpModal from './Verification/OtpModal';
 import FaceVerificationModal from './Verification/FaceVerificationModal';
 import AccountHealthDashboard from './AccountHealthDashboard';
 import QRScannerModal from './Verification/QRScannerModal';
 import UserAnalyticsDashboard from './User/UserAnalyticsDashboard';
-import ReVerificationModal from './Verification/ReVerificationModal';
 
 interface UserDashboardProps {
   user: User;
@@ -42,7 +41,7 @@ const LimitProgressBar: React.FC<{label: string, current: number, max: number}> 
 
     return (
         <div>
-            <p className="text-sm text-gray-300">{label}</p>
+            <p className="text-sm text-gray-400">{label}</p>
             <div className="w-full bg-gray-700 rounded-full h-2.5 my-1">
                 <div className={`${barColor} h-2.5 rounded-full`} style={{ width: `${percentage}%` }}></div>
             </div>
@@ -68,10 +67,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [totals, setTotals] = useState({ daily: 0, weekly: 0 });
   const [limitError, setLimitError] = useState<string | null>(null);
-
-  const [isReVerifyModalOpen, setIsReVerifyModalOpen] = useState(false);
-  const [reVerifyStatus, setReVerifyStatus] = useState<{ status: 'success' | 'failed' | 'idle', message: string }>({ status: 'idle', message: '' });
-
 
   const statusStyles: Record<AccountStatus, string> = {
     ACTIVE: 'bg-green-500/20 text-green-300 border border-green-500/30',
@@ -222,7 +217,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
       if (isFinalState) {
           const timer = setTimeout(() => {
               resetAfterCompletion();
-          }, 1500); // OPTIMIZATION: Reduced from 4000ms to 1500ms
+          }, 1500); 
           return () => clearTimeout(timer);
       }
   }, [processState, isFinalState, resetAfterCompletion]);
@@ -297,18 +292,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
     )
   }
 
-  const handleReVerifySuccess = (reason: string) => {
-    setIsReVerifyModalOpen(false);
-    setReVerifyStatus({ status: 'success', message: reason });
-    setTimeout(() => setReVerifyStatus({ status: 'idle', message: '' }), 5000);
-  };
-
-  const handleReVerifyFailure = (reason: string) => {
-    setIsReVerifyModalOpen(false);
-    setReVerifyStatus({ status: 'failed', message: reason });
-    setTimeout(() => setReVerifyStatus({ status: 'idle', message: '' }), 5000);
-  };
-
   return (
     <>
       <div className="space-y-8">
@@ -321,27 +304,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
               </div>
               <div className="flex flex-col items-end gap-2">
                 <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusStyles[user.status]}`}>
-                    {user.status.replace('_', ' ')}
+                    {user.status.replace(/_/g, ' ')}
                 </span>
-                 <button
-                    onClick={() => {
-                        setReVerifyStatus({ status: 'idle', message: '' });
-                        setIsReVerifyModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200 hover:bg-cyan-500/10 p-1 rounded-md transition-colors"
-                    aria-label="Re-verify face"
-                 >
-                    <UserCheckIcon className="w-4 h-4" />
-                    Re-verify Face
-                 </button>
               </div>
             </div>
-            
-             {reVerifyStatus.status !== 'idle' && (
-                <div className={`p-2 mb-4 rounded-md text-sm text-center font-semibold animate-fade-in ${reVerifyStatus.status === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                    {reVerifyStatus.message}
-                </div>
-            )}
 
             <div className="mb-4 space-y-3">
                 <h3 className="text-lg font-semibold text-gray-300">Transaction Limits</h3>
@@ -541,13 +507,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScan={handleScanSuccess}
-      />
-      <ReVerificationModal
-        isOpen={isReVerifyModalOpen}
-        user={user}
-        onClose={() => setIsReVerifyModalOpen(false)}
-        onSuccess={handleReVerifySuccess}
-        onFailure={handleReVerifyFailure}
       />
     </>
   );

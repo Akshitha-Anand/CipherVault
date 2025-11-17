@@ -1,21 +1,21 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, ProcessingSpinner } from '../icons';
+import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, UserCheckIcon, ProcessingSpinner } from '../icons';
 import { User } from '../../types';
 import { verifyFaceWithAI } from '../../services/databaseService';
 
-interface FaceVerificationModalProps {
+interface ReVerificationModalProps {
   isOpen: boolean;
   user: User;
   onClose: () => void;
-  onSuccess: () => void;
-  onFailure: (capturedImage: string) => void;
+  onSuccess: (reason: string) => void;
+  onFailure: (reason: string) => void;
 }
 
 type VerificationStatus = 'PENDING' | 'VERIFYING' | 'SUCCESS' | 'FAILED';
 
-const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, user, onClose, onSuccess, onFailure }) => {
+const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user, onClose, onSuccess, onFailure }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -61,7 +61,7 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
-      if (verificationStepIntervalRef.current) {
+       if (verificationStepIntervalRef.current) {
           // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
           window.clearInterval(verificationStepIntervalRef.current);
       }
@@ -78,7 +78,7 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
       const mainContext = mainCanvas.getContext('2d');
 
       if (!mainContext) return null;
-      
+
       // Draw mirrored video to main canvas
       mainContext.translate(mainCanvas.width, 0);
       mainContext.scale(-1, 1);
@@ -115,16 +115,15 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
 
   const handleVerify = async () => {
     if (!user.faceReferenceImages || user.faceReferenceImages.length === 0) {
-        const reason = "No reference face data. Transaction cannot be verified.";
+        const reason = "No reference face data found. Please complete profile setup.";
         setFailureReason(reason);
         setStatus('FAILED');
-        setTimeout(() => onClose(), 3000); // Close modal, which flags transaction
+        setTimeout(() => onFailure(reason), 3000);
         return;
     }
-
-    setStatus('VERIFYING');
     
-    // Start verification message cycle immediately
+    setStatus('VERIFYING');
+
     const verificationSteps = [
         "Capturing Biometrics...",
         "Analyzing Facial Vectors...",
@@ -143,35 +142,35 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
     
     const liveImage = captureFrame();
     if (!liveImage) {
-        setFailureReason("Could not capture image from camera.");
+        const reason = "Could not capture image from camera.";
+        setFailureReason(reason);
         setStatus('FAILED');
-        setTimeout(() => onFailure(''), 1000); // Pass empty string if capture fails
+        setTimeout(() => onFailure(reason), 1000);
         return;
     }
-
+    
     try {
-        // FIX: Pass the single captured liveImage to the verification function.
+        // FIX: Pass the single liveImage string to the verification service.
         const result = await verifyFaceWithAI(user.faceReferenceImages, liveImage);
-        
         // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
         
         if(result.match) {
             setStatus('SUCCESS');
-            setTimeout(() => onSuccess(), 250);
+            setTimeout(() => onSuccess(result.reason), 250);
         } else {
             setFailureReason(result.reason);
             setStatus('FAILED');
-            // FIX: Pass the single failed image to the onFailure handler.
-            setTimeout(() => onFailure(liveImage), 1000);
+            setTimeout(() => onFailure(result.reason), 1000);
         }
     } catch(e) {
         // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
         console.error("Biometric comparison failed", e);
-        setFailureReason("A system error occurred during verification.");
+        const reason = "A system error occurred during verification.";
+        setFailureReason(reason);
         setStatus('FAILED');
-        setTimeout(() => onFailure(liveImage), 1000);
+        setTimeout(() => onFailure(reason), 1000);
     }
   };
   
@@ -206,10 +205,10 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
             return (
                  <>
                     <div className="text-center">
-                        <ShieldAlertIcon className="mx-auto w-12 h-12 text-orange-400 mb-4" />
-                        <h2 className="text-2xl font-bold text-orange-400">Biometric Verification</h2>
+                        <UserCheckIcon className="mx-auto w-12 h-12 text-cyan-400 mb-4" />
+                        <h2 className="text-2xl font-bold text-cyan-400">Identity Re-verification</h2>
                         <p className="text-gray-300 mt-2">
-                           Please look straight into the camera and hold still.
+                            Please look straight into the camera and hold still.
                         </p>
                     </div>
                     <div className="mt-6">
@@ -221,9 +220,9 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
                             )}
                         </div>
                         
-                        <button onClick={handleVerify} disabled={!!error || !stream} className="mt-6 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 focus:ring-offset-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed">
+                        <button onClick={handleVerify} disabled={!!error || !stream} className="mt-6 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed">
                             <CameraIcon className="mr-2 w-5 h-5" />
-                            Start Verification
+                            Start Re-verification
                         </button>
                     </div>
                 </>
@@ -245,4 +244,4 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
   );
 };
 
-export default FaceVerificationModal;
+export default ReVerificationModal;

@@ -282,3 +282,29 @@ export const PieChartIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => 
         <path d="M22 12A10 10 0 0 0 12 2v10z" />
     </svg>
 );
+
+export const ProcessingSpinner: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg width="64" height="64" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <g fill="none" strokeWidth="3">
+      <circle cx="24" cy="24" r="20" stroke="rgba(0, 188, 212, 0.2)" />
+      <path
+        stroke="#06b6d4"
+        strokeLinecap="round"
+        d="M24 4 A 20 20 0 0 1 44 24"
+      >
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 24 24"
+          to="360 24 24"
+          dur="0.8s"
+          repeatCount="indefinite"
+        />
+      </path>
+      <circle cx="24" cy="24" r="4" fill="#06b6d4">
+          <animate attributeName="r" from="4" to="8" dur="1.6s" begin="0s" repeatCount="indefinite" values="4;8;4" keyTimes="0;0.5;1" />
+          <animate attributeName="opacity" from="1" to="0.5" dur="1.6s" begin="0s" repeatCount="indefinite" values="1;0.5;1" keyTimes="0;0.5;1" />
+      </circle>
+    </g>
+  </svg>
+);

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, ProcessingSpinner } from '../icons';
 import { User } from '../../types';
@@ -73,44 +71,32 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
       
       const video = videoRef.current;
       const mainCanvas = canvasRef.current;
-      mainCanvas.width = video.videoWidth;
-      mainCanvas.height = video.videoHeight;
-      const mainContext = mainCanvas.getContext('2d');
-
-      if (!mainContext) return null;
-      
-      // Draw mirrored video to main canvas
-      mainContext.translate(mainCanvas.width, 0);
-      mainContext.scale(-1, 1);
-      mainContext.drawImage(video, 0, 0, mainCanvas.width, mainCanvas.height);
-      mainContext.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-
-      // --- RESIZING LOGIC ---
       const MAX_DIMENSION = 512;
-      let targetWidth = mainCanvas.width;
-      let targetHeight = mainCanvas.height;
+      let { videoWidth, videoHeight } = video;
 
-      if (targetWidth > MAX_DIMENSION || targetHeight > MAX_DIMENSION) {
-        if (targetWidth > targetHeight) {
-          targetHeight = Math.round(targetHeight * (MAX_DIMENSION / targetWidth));
-          targetWidth = MAX_DIMENSION;
-        } else {
-          targetWidth = Math.round(targetWidth * (MAX_DIMENSION / targetHeight));
-          targetHeight = MAX_DIMENSION;
-        }
+      // Calculate the aspect ratio
+      const aspectRatio = videoWidth / videoHeight;
+
+      let targetWidth, targetHeight;
+      if (videoWidth > videoHeight) {
+          targetWidth = Math.min(videoWidth, MAX_DIMENSION);
+          targetHeight = targetWidth / aspectRatio;
+      } else {
+          targetHeight = Math.min(videoHeight, MAX_DIMENSION);
+          targetWidth = targetHeight * aspectRatio;
       }
 
-      // Use an offscreen canvas for resizing
-      const resizeCanvas = document.createElement('canvas');
-      resizeCanvas.width = targetWidth;
-      resizeCanvas.height = targetHeight;
-      const resizeContext = resizeCanvas.getContext('2d');
-      
-      if (!resizeContext) return null;
+      mainCanvas.width = targetWidth;
+      mainCanvas.height = targetHeight;
+      const context = mainCanvas.getContext('2d');
+      if (!context) return null;
 
-      resizeContext.drawImage(mainCanvas, 0, 0, targetWidth, targetHeight);
+      // Flip the image horizontally for a mirror effect
+      context.translate(targetWidth, 0);
+      context.scale(-1, 1);
+      context.drawImage(video, 0, 0, targetWidth, targetHeight);
       
-      return resizeCanvas.toDataURL('image/jpeg', 0.8);
+      return mainCanvas.toDataURL('image/jpeg', 0.8);
   }
 
   const handleVerify = async () => {
@@ -118,7 +104,7 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
         const reason = "No reference face data. Transaction cannot be verified.";
         setFailureReason(reason);
         setStatus('FAILED');
-        setTimeout(() => onClose(), 3000); // Close modal, which flags transaction
+        setTimeout(() => onFailure(''), 2000); 
         return;
     }
 
@@ -126,10 +112,11 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
     
     // Start verification message cycle immediately
     const verificationSteps = [
-        "Capturing Biometrics...",
-        "Analyzing Facial Vectors...",
-        "Comparing Signatures...",
-        "Finalizing Result..."
+        "Analyzing facial geometry...",
+        "Comparing biometric signatures...",
+        "Cross-referencing data points...",
+        "Checking for liveness...",
+        "Finalizing verification..."
     ];
     let stepIndex = 0;
 
@@ -139,39 +126,40 @@ const FaceVerificationModal: React.FC<FaceVerificationModalProps> = ({ isOpen, u
     };
     updateMessage();
     // FIX: Use window.setInterval to avoid type conflicts with Node's Timeout type.
-    verificationStepIntervalRef.current = window.setInterval(updateMessage, 1500);
+    verificationStepIntervalRef.current = window.setInterval(updateMessage, 100);
     
     const liveImage = captureFrame();
     if (!liveImage) {
-        setFailureReason("Could not capture image from camera.");
+        const reason = "Could not capture image from camera.";
+        setFailureReason(reason);
         setStatus('FAILED');
-        setTimeout(() => onFailure(''), 1000); // Pass empty string if capture fails
+        setTimeout(() => onFailure(''), 2000); // Pass empty string if capture fails
         return;
     }
-
+    
     try {
-        // FIX: Pass the single captured liveImage to the verification function.
         const result = await verifyFaceWithAI(user.faceReferenceImages, liveImage);
         
         // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
         
         if(result.match) {
+            setVerificationMessage('Verification Successful');
             setStatus('SUCCESS');
-            setTimeout(() => onSuccess(), 250);
+            setTimeout(() => onSuccess(), 1000);
         } else {
             setFailureReason(result.reason);
             setStatus('FAILED');
-            // FIX: Pass the single failed image to the onFailure handler.
-            setTimeout(() => onFailure(liveImage), 1000);
+            setTimeout(() => onFailure(liveImage), 2000);
         }
     } catch(e) {
         // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
-        console.error("Biometric comparison failed", e);
-        setFailureReason("A system error occurred during verification.");
+        console.error("Biometric verification failed", e);
+        const reason = "A system error occurred during verification.";
+        setFailureReason(reason);
         setStatus('FAILED');
-        setTimeout(() => onFailure(liveImage), 1000);
+        setTimeout(() => onFailure(liveImage), 2000);
     }
   };
   
