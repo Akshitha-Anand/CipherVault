@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getWorkflowStats } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { ArrowRightIcon } from '../icons';
 
 interface WorkflowStats {
@@ -34,8 +34,12 @@ const WorkflowAnalysisChart: React.FC = () => {
 
     useEffect(() => {
         const fetchStats = async () => {
-            const data = await getWorkflowStats();
-            setStats(data);
+            try {
+                const data = await databaseService.getWorkflowStats();
+                setStats(data);
+            } catch (error) {
+                console.error("Failed to fetch workflow stats:", error);
+            }
         };
         fetchStats();
     }, []);

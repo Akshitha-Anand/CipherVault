@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getUsersWithRiskStats } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { User } from '../../types';
 import { ShieldAlertIcon } from '../icons';
 
@@ -15,8 +15,12 @@ const TopAtRiskAccounts: React.FC = () => {
 
     useEffect(() => {
         const fetchUsers = async () => {
-            const data = await getUsersWithRiskStats();
-            setUsers(data.slice(0, 5)); // Top 5
+            try {
+                const data = await databaseService.getUsersWithRiskStats();
+                setUsers(data.slice(0, 5)); // Top 5
+            } catch (error) {
+                console.error("Failed to fetch at-risk users:", error);
+            }
             setLoading(false);
         };
         fetchUsers();

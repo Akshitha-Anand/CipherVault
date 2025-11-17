@@ -1,28 +1,25 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { CameraIcon, RefreshCwIcon, ShieldCheckIcon } from '../icons';
+import { CameraIcon, RefreshCwIcon, ShieldCheckIcon, XIcon } from '../icons';
 
 interface FaceCaptureFormProps {
   onSubmit: (faceImages: string[]) => void;
+  isLoading: boolean;
 }
 
-const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit }) => {
+const MAX_IMAGES = 5;
+const MIN_IMAGES = 3;
+
+const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
-  const [step, setStep] = useState(0); // 0, 1, 2 for captures
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
-  
-  const instructions = [
-      "Look straight ahead into the camera.",
-      "Now, turn your head slightly to the left.",
-      "Finally, turn your head slightly to the right."
-  ];
 
   const startCamera = async () => {
     if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => track.stop());
     }
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -38,100 +35,109 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit }) => {
   };
 
   useEffect(() => {
-    if (capturedImages.length < 3) {
-        startCamera();
-    }
-    
+    startCamera();
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [capturedImages.length]);
+  }, []);
 
   const handleCapture = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || capturedImages.length >= MAX_IMAGES) return;
+    
     const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const context = canvas.getContext('2d');
+    
     if (context) {
-        context.translate(canvas.width, 0);
-        context.scale(-1, 1);
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        context.setTransform(1, 0, 0, 1, 0, 0);
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.setTransform(1, 0, 0, 1, 0, 0);
     }
+    
     const image = canvas.toDataURL('image/jpeg', 0.8);
     setCapturedImages(prev => [...prev, image]);
-    setStep(prev => prev + 1);
-
-    if (step === 2) {
-         if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            setStream(null);
-        }
-    }
   };
 
-  const handleRetake = () => {
-    setCapturedImages([]);
-    setStep(0);
+  const handleDeleteImage = (index: number) => {
+    setCapturedImages(prev => prev.filter((_, i) => i !== index));
   };
-  
+
   const handleSubmit = () => {
-    if(capturedImages.length === 3) {
-        onSubmit(capturedImages);
+    if (capturedImages.length >= MIN_IMAGES) {
+      onSubmit(capturedImages);
     }
-  }
-
-  const isReviewing = capturedImages.length === 3;
+  };
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-8 shadow-lg animate-fade-in">
-        <canvas ref={canvasRef} className="hidden"></canvas>
-        <h2 className="text-2xl font-semibold mb-2 text-cyan-300">Biometric Setup</h2>
-        <p className="text-gray-400 mb-6">{isReviewing ? 'Step 3: Review your captures.' : `Step 3: Capture your face (${step + 1}/3).`}</p>
-        
-        <div className="w-full aspect-square bg-gray-900 rounded-md flex items-center justify-center overflow-hidden relative">
-            {error && <p className="text-red-400 text-center text-sm p-4">{error}</p>}
-            
-            {isReviewing ? (
-                 <div className="grid grid-cols-3 gap-2 p-2 h-full w-full">
-                    {capturedImages.map((img, i) => (
-                        <img key={i} src={img} alt={`Capture ${i+1}`} className="w-full h-full object-cover rounded-md" />
-                    ))}
-                 </div>
-            ) : (
-                <>
-                    <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover transform -scale-x-100"></video>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-3/4 h-3/4 border-4 border-dashed border-white/30 rounded-full"></div>
-                    </div>
-                </>
-            )}
-        </div>
-        
-        <p className="text-center text-cyan-300 font-semibold my-4 h-5">
-            {!isReviewing && instructions[step]}
-        </p>
+      <canvas ref={canvasRef} className="hidden"></canvas>
+      <h2 className="text-2xl font-semibold mb-2 text-cyan-300">Biometric Setup</h2>
+      <p className="text-gray-400 mb-6">Capture at least {MIN_IMAGES} clear photos of your face for accurate verification.</p>
+      
+      <div className="w-full aspect-square bg-gray-900 rounded-md flex items-center justify-center overflow-hidden relative">
+        {error ? (
+          <p className="text-red-400 text-center text-sm p-4">{error}</p>
+        ) : (
+          <>
+            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover transform -scale-x-100"></video>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-3/4 h-3/4 border-4 border-dashed border-white/30 rounded-full"></div>
+            </div>
+          </>
+        )}
+      </div>
 
-        <div className="mt-2">
-            {isReviewing ? (
-                <div className="grid grid-cols-2 gap-4">
-                    <button onClick={handleRetake} className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-600 text-base font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600">
-                        <RefreshCwIcon className="mr-2 w-5 h-5" /> Retake All
-                    </button>
-                    <button onClick={handleSubmit} className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700">
-                        <ShieldCheckIcon className="mr-2 w-5 h-5" /> Confirm & Finish
-                    </button>
-                </div>
-            ) : (
-                <button onClick={handleCapture} disabled={!!error || !stream} className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600">
-                    <CameraIcon className="mr-2 w-5 h-5" /> Capture Photo ({step + 1}/3)
+      <div className="mt-4">
+        <button 
+          onClick={handleCapture} 
+          disabled={!!error || !stream || isLoading || capturedImages.length >= MAX_IMAGES} 
+          className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+        >
+          <CameraIcon className="mr-2 w-5 h-5" /> 
+          {capturedImages.length >= MAX_IMAGES ? `Limit Reached (${MAX_IMAGES})` : `Capture Photo (${capturedImages.length}/${MAX_IMAGES})`}
+        </button>
+      </div>
+
+      {capturedImages.length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-sm font-semibold text-gray-300 mb-2">Your Captures:</h3>
+          <div className="grid grid-cols-5 gap-2">
+            {capturedImages.map((img, i) => (
+              <div key={i} className="relative group">
+                <img src={img} alt={`Capture ${i+1}`} className="w-full h-full object-cover rounded-md" />
+                <button 
+                  onClick={() => handleDeleteImage(i)}
+                  className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={`Delete capture ${i+1}`}
+                >
+                  <XIcon className="w-3 h-3" />
                 </button>
-            )}
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      <div className="mt-6">
+        <button 
+          onClick={handleSubmit} 
+          disabled={isLoading || capturedImages.length < MIN_IMAGES} 
+          className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ShieldCheckIcon className="mr-2 w-5 h-5" /> 
+          {isLoading ? 'Processing...' : `Confirm & Finish (${capturedImages.length})`}
+        </button>
+        {capturedImages.length < MIN_IMAGES && (
+            <p className="text-center text-yellow-400 text-xs mt-2">
+                Please capture at least {MIN_IMAGES - capturedImages.length} more photo(s).
+            </p>
+        )}
+      </div>
     </div>
   );
 };

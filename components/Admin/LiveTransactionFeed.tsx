@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { getAllTransactions } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { Transaction, RiskLevel } from '../../types';
 import { ActivityIcon } from '../icons';
 
+// FIX: Removed 'Idle' and 'Critical' keys as they do not exist in the 'RiskLevel' enum.
 const riskStyles: { [key in RiskLevel]: string } = {
-    [RiskLevel.Idle]: 'border-gray-600',
     [RiskLevel.Low]: 'border-gray-700',
     [RiskLevel.Medium]: 'border-yellow-600/50 bg-yellow-900/10',
     [RiskLevel.High]: 'border-orange-600/50 bg-orange-900/10',
-    [RiskLevel.Critical]: 'border-red-600/50 bg-red-900/10',
 };
 
 const TransactionItem: React.FC<{ tx: Transaction }> = ({ tx }) => (
@@ -31,8 +30,12 @@ const LiveTransactionFeed: React.FC = () => {
 
     useEffect(() => {
         const fetchTransactions = async () => {
-            const data = await getAllTransactions();
-            setTransactions(data.slice(0, 20)); // Show latest 20
+            try {
+                const data = await databaseService.getAllTransactions();
+                setTransactions(data.slice(0, 20)); // Show latest 20
+            } catch (error) {
+                console.error("Failed to fetch transactions:", error);
+            }
             setLoading(false);
         };
         fetchTransactions();

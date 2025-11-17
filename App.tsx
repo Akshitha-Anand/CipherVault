@@ -6,7 +6,10 @@ import AdminPage from './pages/AdminPage';
 import SecurityAnalystPage from './pages/SecurityAnalystPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import NotificationsPage from './pages/NotificationsPage';
 import { Role, User } from './types';
+
+type View = 'MAIN' | 'NOTIFICATIONS';
 
 const RoleSwitcher: React.FC<{ currentRole: Role; setRole: (role: Role) => void }> = ({ currentRole, setRole }) => {
   const roles: Role[] = ['USER', 'ADMIN', 'ANALYST'];
@@ -36,15 +39,22 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>('USER');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [currentView, setCurrentView] = useState<View>('MAIN');
 
   const handleLogin = useCallback((user: User) => {
     setCurrentUser(user);
     setIsRegistering(false);
+    setCurrentView('MAIN');
   }, []);
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
     setRole('USER');
+    setCurrentView('MAIN');
+  }, []);
+
+  const navigateTo = useCallback((view: View) => {
+    setCurrentView(view);
   }, []);
 
   const CurrentPage = useMemo(() => {
@@ -55,6 +65,10 @@ export default function App() {
       return <LoginPage onLogin={handleLogin} onSwitchToRegister={() => setIsRegistering(true)} />;
     }
 
+    if (currentView === 'NOTIFICATIONS') {
+        return <NotificationsPage user={currentUser} onNavigateBack={() => navigateTo('MAIN')} />;
+    }
+    
     switch (role) {
       case 'USER':
         return <UserPage user={currentUser} />;
@@ -65,7 +79,7 @@ export default function App() {
       default:
         return <UserPage user={currentUser} />;
     }
-  }, [role, currentUser, isRegistering, handleLogin]);
+  }, [role, currentUser, isRegistering, handleLogin, currentView, navigateTo]);
 
   const mainContentClass = currentUser ? "mt-8" : "flex items-center justify-center min-h-[calc(100vh-200px)]";
 
@@ -73,7 +87,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans antialiased relative overflow-hidden">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjAsIDM1LCA2MCwgMC4yNSkiPjxwYXRoIGQ9Ik0wIC41SDMybTAtMVYwIj48L3BhdGg+PC9zdmc+')] opacity-50"></div>
       <div className="relative z-10 container mx-auto px-4 py-8">
-        <Header user={currentUser} onLogout={handleLogout} />
+        <Header user={currentUser} onLogout={handleLogout} onNavigate={navigateTo} />
         {currentUser && <RoleSwitcher currentRole={role} setRole={setRole} />}
         <main className={mainContentClass}>
           {CurrentPage}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getPlatformStats } from '../../services/databaseService';
-import { UsersIcon, ActivityIcon, DollarSignIcon, ShieldAlertIcon, BarChartIcon } from '../icons';
+import databaseService from '../../services/databaseService';
+import { UsersIcon, ActivityIcon, DollarSignIcon, ShieldAlertIcon } from '../icons';
 
 interface PlatformStats {
     totalUsers: number;
@@ -34,8 +34,12 @@ const AnalyticsDashboard: React.FC = () => {
     useEffect(() => {
         const fetchStats = async () => {
             setLoading(true);
-            const data = await getPlatformStats();
-            setStats(data);
+            try {
+                const data = await databaseService.getPlatformStats();
+                setStats(data);
+            } catch (error) {
+                console.error("Failed to fetch platform stats:", error);
+            }
             setLoading(false);
         };
         fetchStats();

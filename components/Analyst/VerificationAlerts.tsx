@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getPendingIncidents, escalateIncident } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { VerificationIncident } from '../../types';
 import { ShieldAlertIcon, ChevronUpIcon } from '../icons';
 
@@ -8,8 +8,12 @@ const VerificationAlerts: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     const fetchIncidents = useCallback(async () => {
-        const data = await getPendingIncidents();
-        setIncidents(data);
+        try {
+            const data = await databaseService.getPendingIncidents();
+            setIncidents(data);
+        } catch (error) {
+            console.error("Failed to fetch pending incidents:", error);
+        }
         setLoading(false);
     }, []);
 
@@ -18,7 +22,7 @@ const VerificationAlerts: React.FC = () => {
     }, [fetchIncidents]);
     
     const handleEscalate = async (incidentId: string) => {
-        await escalateIncident(incidentId);
+        await databaseService.escalateIncident(incidentId);
         fetchIncidents(); // Refresh the list
     }
 

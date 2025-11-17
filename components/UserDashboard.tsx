@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction, UserAnalyticsData, AccountStatus, TransactionType, NotificationType } from '../types';
-import { analyzeTransaction } from '../services/geminiService';
-import { addTransaction, updateTransactionStatus, getUserDailyTransactionTotal, getUserWeeklyTransactionTotal, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT, createNotification } from '../services/databaseService';
+import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction, UserAnalyticsData, AccountStatus, TransactionType, LocationStatus } from '../types';
+import databaseService from '../services/databaseService';
+import geminiService from '../services/geminiService';
 import { useDebounce } from '../hooks/useDebounce';
-import { CheckCircle2, CpuIcon, AlertTriangleIcon, UserIcon, ThumbsUpIcon, ThumbsDownIcon, HandIcon, ShieldXIcon, ShieldQuestionIcon, QrCodeIcon, InfoIcon } from './icons';
-import OtpModal from './Verification/OtpModal';
+import { CheckCircle2, CpuIcon, AlertTriangleIcon, UserIcon, ShieldXIcon, QrCodeIcon, InfoIcon, BellIcon } from './icons';
 import FaceVerificationModal from './Verification/FaceVerificationModal';
 import AccountHealthDashboard from './AccountHealthDashboard';
 import QRScannerModal from './Verification/QRScannerModal';
@@ -18,20 +18,13 @@ interface UserDashboardProps {
   onVerificationFailure: (transaction: Transaction, capturedImage: string) => void;
 }
 
-const getRiskLevel = (score: number | null): RiskLevel => {
-  if (score === null) return RiskLevel.Idle;
-  if (score <= 40) return RiskLevel.Low;
-  if (score <= 70) return RiskLevel.Medium;
-  if (score <= 90) return RiskLevel.High;
-  return RiskLevel.Critical;
-};
+type DisplayRiskLevel = RiskLevel | 'Idle';
 
-const riskConfig = {
-    [RiskLevel.Idle]: { color: 'gray', label: 'Awaiting Transaction', scoreRange: '' },
-    [RiskLevel.Low]: { color: 'green', label: 'Low Risk', scoreRange: '0-40%' },
-    [RiskLevel.Medium]: { color: 'yellow', label: 'Medium Risk', scoreRange: '41-70%' },
-    [RiskLevel.High]: { color: 'orange', label: 'High Risk', scoreRange: '71-90%' },
-    [RiskLevel.Critical]: { color: 'red', label: 'Critical Risk', scoreRange: '91-100%' },
+const riskConfig: Record<DisplayRiskLevel, { color: string; label: string; }> = {
+    Idle: { color: 'gray', label: 'Awaiting Transaction' },
+    LOW: { color: 'green', label: 'Low Risk' },
+    MEDIUM: { color: 'yellow', label: 'Medium Risk' },
+    HIGH: { color: 'red', label: 'High Risk' },
 };
 
 const LimitProgressBar: React.FC<{label: string, current: number, max: number}> = ({ label, current, max }) => {
@@ -63,9 +56,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
   const debouncedAmount = useDebounce(amount, 300);
   
   const [location, setLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('PENDING');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [totals, setTotals] = useState({ daily: 0, weekly: 0 });
-  const [limitError, setLimitError] = useState<string | null>(null);
+
+  const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+  const [transactionToConfirm, setTransactionToConfirm] = useState<Omit<Transaction, 'id' | 'riskLevel' | 'riskScore' | 'status' | 'aiAnalysisLog' | 'userName'> | null>(null);
 
   const statusStyles: Record<AccountStatus, string> = {
     ACTIVE: 'bg-green-500/20 text-green-300 border border-green-500/30',
@@ -75,10 +71,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
   
   const fetchTransactionTotals = useCallback(async (txType: TransactionType) => {
     if (txType === 'UPI' || txType === 'IMPS') {
-        const [daily, weekly] = await Promise.all([
-            getUserDailyTransactionTotal(user.id, txType),
-            getUserWeeklyTransactionTotal(user.id, txType)
-        ]);
+        const { daily, weekly } = await databaseService.getTransactionTotals(user.id, txType);
         setTotals({ daily, weekly });
     } else {
         setTotals({ daily: 0, weekly: 0 }); // No limits for NEFT/RTGS
@@ -87,103 +80,113 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
 
   useEffect(() => {
     fetchTransactionTotals(type);
-    handleAmountChange(amount, type, true); // Re-validate limits when type changes
 
+    setLocationStatus('PENDING');
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocation({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
+        setLocationStatus('SUCCESS');
       },
       (err) => {
         console.warn('Could not get location:', err.message);
+        if (err.code === err.PERMISSION_DENIED) {
+            setLocationStatus('DENIED');
+        } else {
+            setLocationStatus('UNAVAILABLE');
+        }
+      },
+      {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
       }
     );
   }, [type, fetchTransactionTotals]);
 
+  const proceedWithAnalysis = useCallback(async (transactionDetails: Omit<Transaction, 'id' | 'riskLevel' | 'riskScore' | 'status' | 'aiAnalysisLog' | 'userName'>) => {
+    setProcessState(ProcessState.Analyzing);
+    setAnalysisResult(null);
+    setError(null);
+
+    try {
+      const analysis = await geminiService.analyzeTransaction(transactionDetails, user, locationStatus);
+      const resultTransaction = await databaseService.createTransaction({
+        ...transactionDetails,
+        riskScore: analysis.riskScore,
+        riskLevel: analysis.riskLevel,
+        aiAnalysisLog: analysis.analysis,
+      });
+      
+      setAnalysisResult({ riskScore: resultTransaction.riskScore, analysis: resultTransaction.aiAnalysisLog });
+      setCurrentTransaction(resultTransaction);
+
+      switch (resultTransaction.riskLevel) {
+        case RiskLevel.Low:
+            setProcessState(ProcessState.Approved);
+            break;
+        case RiskLevel.Medium:
+            setProcessState(ProcessState.AwaitingOTP);
+            break;
+        case RiskLevel.High:
+            setProcessState(ProcessState.VerificationBiometric);
+            break;
+        default:
+            await databaseService.updateTransactionStatus(resultTransaction.id, 'BLOCKED_BY_AI');
+            setProcessState(ProcessState.Blocked);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Failed to analyze transaction. Please try again.');
+      setProcessState(ProcessState.Error);
+    }
+  }, [user, locationStatus]);
 
   const handleAnalysis = useCallback(async (currentAmount: string) => {
-    if (!recipient || !currentAmount || parseFloat(currentAmount) <= 0 || user.status === 'BLOCKED' || limitError) {
+    if (!recipient || !currentAmount || parseFloat(currentAmount) <= 0 || user.status === 'BLOCKED') {
       setProcessState(ProcessState.Idle);
       setAnalysisResult(null);
       setCurrentTransaction(null);
       return;
     }
     
-    setProcessState(ProcessState.Analyzing);
-    setAnalysisResult(null);
-    setError(null);
+    const numericAmount = parseFloat(currentAmount);
+    const pendingTransaction: Omit<Transaction, 'id' | 'riskLevel' | 'riskScore' | 'status' | 'aiAnalysisLog' | 'userName'> = {
+        userId: user.id,
+        recipient,
+        amount: numericAmount,
+        type,
+        location,
+        time: new Date().toISOString()
+    };
 
-    try {
-      const pendingTransaction: Omit<Transaction, 'id' | 'riskLevel' | 'riskScore' | 'status' | 'aiAnalysisLog'> = {
-          userId: user.id,
-          userName: user.name,
-          recipient,
-          amount: parseFloat(currentAmount),
-          type,
-          location,
-          time: new Date().toISOString()
-      };
-
-      const result = await analyzeTransaction(pendingTransaction, user, totals.daily, totals.weekly);
-      setAnalysisResult(result);
-      const riskLevel = getRiskLevel(result.riskScore);
-      
-      const newTransaction = await addTransaction({
-        ...pendingTransaction,
-        riskScore: result.riskScore,
-        riskLevel: riskLevel,
-        status: 'PENDING',
-        aiAnalysisLog: result.analysis,
-      });
-      setCurrentTransaction(newTransaction);
-
-      if (riskLevel === RiskLevel.High || riskLevel === RiskLevel.Critical) {
-          await createNotification(user.id, NotificationType.HighRiskTransaction, {
-              amount: newTransaction.amount,
-              recipient: newTransaction.recipient,
-              transactionId: newTransaction.id,
-          });
-      }
-
-      if (riskLevel === RiskLevel.Low) {
-        setProcessState(ProcessState.Approved);
-        await updateTransactionStatus(newTransaction.id, 'APPROVED');
-      } else {
-        setProcessState(ProcessState.AwaitingUserAction);
-      }
-    } catch (err) {
-      console.error(err);
-      setError('Failed to analyze transaction. Please try again.');
-      setProcessState(ProcessState.Error);
+    if (numericAmount >= 10000) {
+        setTransactionToConfirm(pendingTransaction);
+        setIsConfirmationModalOpen(true);
+        return;
     }
-  }, [recipient, location, user, limitError, type, totals]);
+
+    await proceedWithAnalysis(pendingTransaction);
+
+  }, [recipient, location, user, type, locationStatus, proceedWithAnalysis]);
   
   useEffect(() => {
       handleAnalysis(debouncedAmount);
   }, [debouncedAmount, recipient, handleAnalysis]);
   
-  const handleUserConfirmation = () => {
-    const riskLevel = getRiskLevel(analysisResult?.riskScore ?? null);
-     if (riskLevel === RiskLevel.Medium) {
-        setProcessState(ProcessState.VerificationOTP);
-     } else if (riskLevel === RiskLevel.High || riskLevel === RiskLevel.Critical) {
-        setProcessState(ProcessState.VerificationBiometric);
-     }
-  };
-
-  const handleUserRejection = async (isBlocking: boolean) => {
+  const handleVerificationModalClose = async () => {
     setProcessState(ProcessState.Blocked);
     if(currentTransaction){
-        await updateTransactionStatus(currentTransaction.id, isBlocking ? 'BLOCKED_BY_USER' : 'FLAGGED_BY_USER');
+        await databaseService.updateTransactionStatus(currentTransaction.id, 'BLOCKED_BY_USER');
     }
   };
   
   const handleVerificationSuccess = async () => {
       setProcessState(ProcessState.Approved);
       if(currentTransaction){
-          await updateTransactionStatus(currentTransaction.id, 'APPROVED');
+          await databaseService.updateTransactionStatus(currentTransaction.id, 'APPROVED');
       }
   }
   
@@ -196,76 +199,53 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
 
   const resetAfterCompletion = useCallback(() => {
     onTransactionComplete();
-    fetchTransactionTotals(type); // Re-fetch totals for the current type
+    fetchTransactionTotals(type); 
     setRecipient('');
     setAmount('');
-    // setType('UPI'); // Keep the current type selected
     setProcessState(ProcessState.Idle);
     setAnalysisResult(null);
     setCurrentTransaction(null);
     setError(null);
-    setLimitError(null);
   }, [onTransactionComplete, fetchTransactionTotals, type]);
 
-  const riskLevel = getRiskLevel(analysisResult?.riskScore ?? null);
-  const config = riskConfig[riskLevel];
-  const score = analysisResult?.riskScore ?? 0;
-  const scoreColorClass = {
-      [RiskLevel.Low]: 'text-green-400',
-      [RiskLevel.Medium]: 'text-yellow-400',
-      [RiskLevel.High]: 'text-orange-400',
-      [RiskLevel.Critical]: 'text-red-400',
-      [RiskLevel.Idle]: 'text-gray-400'
-  }[riskLevel];
-
-  const isFinalState = processState === ProcessState.Approved || processState === ProcessState.Blocked;
+  const isFinalState = processState === ProcessState.Approved || processState === ProcessState.Blocked || processState === ProcessState.AwaitingOTP;
 
   useEffect(() => {
       if (isFinalState) {
-          const timer = setTimeout(() => {
-              resetAfterCompletion();
-          }, 1000); // Reduced delay
+          const timer = setTimeout(resetAfterCompletion, 2500);
           return () => clearTimeout(timer);
       }
   }, [processState, isFinalState, resetAfterCompletion]);
 
-  const handleAmountChange = (value: string, currentType: TransactionType = type, forceCheck: boolean = false) => {
-      if (!forceCheck && value === amount) return;
-
+  const handleAmountChange = (value: string) => {
       setAmount(value);
-      const newAmount = parseFloat(value) || 0;
-  
       setProcessState(ProcessState.Idle);
       setAnalysisResult(null);
       setError(null);
-      
-      let errorMsg: string | null = null;
-      
-      if (currentType === 'UPI') {
-          if (newAmount > 0 && totals.daily + newAmount > DAILY_UPI_LIMIT) {
-              errorMsg = `Exceeds daily UPI limit of ₹${DAILY_UPI_LIMIT.toLocaleString('en-IN')}`;
-          } else if (newAmount > 0 && totals.weekly + newAmount > WEEKLY_UPI_LIMIT) {
-              errorMsg = `Exceeds weekly UPI limit of ₹${WEEKLY_UPI_LIMIT.toLocaleString('en-IN')}`;
-          }
-      } else if (currentType === 'IMPS') {
-          if (newAmount > 0 && totals.daily + newAmount > DAILY_IMPS_LIMIT) {
-              errorMsg = `Exceeds daily IMPS limit of ₹${DAILY_IMPS_LIMIT.toLocaleString('en-IN')}`;
-          } else if (newAmount > 0 && totals.weekly + newAmount > WEEKLY_IMPS_LIMIT) {
-              errorMsg = `Exceeds weekly IMPS limit of ₹${WEEKLY_IMPS_LIMIT.toLocaleString('en-IN')}`;
-          }
-      }
-      setLimitError(errorMsg);
+  };
+
+  const handleConfirmTransaction = async () => {
+    if (!transactionToConfirm) return;
+    setIsConfirmationModalOpen(false);
+    await proceedWithAnalysis(transactionToConfirm);
+    setTransactionToConfirm(null);
+  };
+
+  const handleCancelConfirmation = () => {
+    setIsConfirmationModalOpen(false);
+    setTransactionToConfirm(null);
   };
 
 
   const renderStatus = () => {
       if(user.status === 'BLOCKED') return <div className="text-red-400 font-semibold">Account Blocked</div>
-      if(limitError) return <div className="text-red-400 font-semibold">Transaction Blocked</div>
+      if(error) return <div className="text-red-400 font-semibold">{error}</div>
       if(processState === ProcessState.Approved) return <div className="text-green-400 font-semibold">Transaction Approved</div>
       if(processState === ProcessState.Blocked) return <div className="text-red-400 font-semibold">Transaction Blocked & Notified</div>
-      if(processState === ProcessState.VerificationBiometric || processState === ProcessState.VerificationOTP) return <div className="text-yellow-400 font-semibold">Verification Required</div>
+      if(processState === ProcessState.AwaitingOTP) return <div className="text-yellow-400 font-semibold flex items-center justify-center gap-2"><BellIcon className="w-4 h-4" /> OTP sent to Notifications</div>
+      if(processState === ProcessState.VerificationBiometric) return <div className="text-yellow-400 font-semibold">Face Verification Required</div>
+      if(isConfirmationModalOpen) return <div className="text-yellow-400 font-semibold">Awaiting Confirmation</div>
       if(processState === ProcessState.Analyzing) return <div className="text-cyan-400 animate-pulse">Analyzing...</div>
-      if(processState === ProcessState.AwaitingUserAction) return <div className="text-yellow-400 font-semibold">Action Required</div>
       return <div className="text-gray-400">Ready for transaction</div>
   }
   
@@ -275,19 +255,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
   }
   
   const renderLimitInfo = () => {
-    if (type === 'UPI') {
+    const limits = { UPI: { daily: 100000, weekly: 500000 }, IMPS: { daily: 500000, weekly: 2000000 } };
+    if (type === 'UPI' || type === 'IMPS') {
         return (
             <div className="space-y-3">
-                <LimitProgressBar label="Today's UPI Limit" current={totals.daily} max={DAILY_UPI_LIMIT} />
-                <LimitProgressBar label="This Week's UPI Limit" current={totals.weekly} max={WEEKLY_UPI_LIMIT} />
-            </div>
-        )
-    }
-    if (type === 'IMPS') {
-         return (
-            <div className="space-y-3">
-                <LimitProgressBar label="Today's IMPS Limit" current={totals.daily} max={DAILY_IMPS_LIMIT} />
-                <LimitProgressBar label="This Week's IMPS Limit" current={totals.weekly} max={WEEKLY_IMPS_LIMIT} />
+                <LimitProgressBar label={`Today's ${type} Limit`} current={totals.daily} max={limits[type].daily} />
+                <LimitProgressBar label={`This Week's ${type} Limit`} current={totals.weekly} max={limits[type].weekly} />
             </div>
         )
     }
@@ -299,11 +272,15 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
     )
   }
 
+  const riskLevel: DisplayRiskLevel = currentTransaction?.riskLevel ?? 'Idle';
+  const config = riskConfig[riskLevel];
+  const score = analysisResult?.riskScore ?? 0;
+  const scoreColorClass = riskConfig[riskLevel]?.color ? `text-${riskConfig[riskLevel].color}-400` : 'text-gray-400';
+
   return (
     <>
       <div className="space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Transaction Input */}
           <div className="lg:col-span-1 bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-6 shadow-lg relative flex flex-col">
             <div className="flex items-start justify-between mb-4 border-b border-gray-700 pb-4">
               <div>
@@ -329,16 +306,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                     <label className="block text-sm font-medium text-gray-300 mb-1">Type:</label>
                     <div className="flex items-center space-x-2">
                         {(['UPI', 'IMPS', 'NEFT', 'RTGS'] as TransactionType[]).map(txType => (
-                            <button
-                                key={txType}
-                                onClick={() => setType(txType)}
-                                className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${
-                                    type === txType
-                                        ? 'bg-cyan-600 text-white'
-                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                }`}
-                                disabled={isFinalState || user.status === 'BLOCKED'}
-                            >
+                            <button key={txType} onClick={() => setType(txType)}
+                                className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${ type === txType ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600' }`}
+                                disabled={isFinalState || user.status === 'BLOCKED'} >
                                 {txType}
                             </button>
                         ))}
@@ -350,8 +320,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                       <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                         <UserIcon className="h-5 w-5 text-gray-400" />
                       </div>
-                      <input
-                        type="text" id="recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)}
+                      <input type="text" id="recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)}
                         className="block w-full rounded-md border-gray-600 bg-gray-900/50 pl-10 py-2 focus:border-cyan-500 focus:ring-cyan-500"
                         placeholder="UPI, mobile number, or contact"
                         disabled={isFinalState || user.status === 'BLOCKED'}
@@ -367,21 +336,18 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                         <span className="text-gray-400 sm:text-sm">₹</span>
                       </div>
-                      <input
-                        type="number" id="amount" value={amount} onChange={(e) => handleAmountChange(e.target.value)}
-                        className={`block w-full rounded-md border-gray-600 bg-gray-900/50 pl-7 py-2 focus:border-cyan-500 focus:ring-cyan-500 ${limitError ? 'border-red-500 ring-red-500' : ''}`}
+                      <input type="number" id="amount" value={amount} onChange={(e) => handleAmountChange(e.target.value)}
+                        className="block w-full rounded-md border-gray-600 bg-gray-900/50 pl-7 py-2 focus:border-cyan-500 focus:ring-cyan-500"
                         placeholder="0.00"
                          disabled={isFinalState || user.status === 'BLOCKED'}
                       />
                     </div>
-                    {limitError && <p className="text-red-400 text-xs mt-1 text-center font-semibold">{limitError}</p>}
                   </div>
                 </div>
             </div>
             <div className="text-center pt-2 text-sm h-5 mt-auto">{renderStatus()}</div>
           </div>
 
-          {/* Analysis Dashboard */}
           <div className="lg:col-span-2 bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-6 shadow-lg min-h-[260px] flex items-center justify-center">
               {processState === ProcessState.Idle && !amount && !recipient && (
                   <div className="text-center text-gray-400">
@@ -389,36 +355,20 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                       <h3 className="text-xl font-semibold">AI Analysis Engine</h3>
                       {user.status === 'BLOCKED' ? 
                         <p className="text-red-400 mt-2">Your account is currently blocked for security reasons.</p> :
-                        limitError ?
-                        <p className="text-red-400 mt-2">{limitError}</p> :
                         <p>Enter recipient and amount to begin analysis.</p>
                       }
                   </div>
               )}
               
-              {processState === ProcessState.Blocked && limitError && (
-                 <div className="text-center text-red-400">
-                     <ShieldXIcon className="mx-auto w-12 h-12 text-red-500 mb-4" />
-                     <p className="font-semibold text-xl">Transaction Blocked</p>
-                     <p className="text-sm">{limitError}</p>
-                 </div>
-              )}
-
-              {(processState !== ProcessState.Idle || (!!amount || !!recipient)) && !(processState === ProcessState.Blocked && limitError) && (
+              { (processState !== ProcessState.Idle || (!!amount || !!recipient)) && (
                    <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                        <div className="flex flex-col items-center justify-center">
                            <div className={`relative w-32 h-32 flex items-center justify-center`}>
                                 <svg className="absolute w-full h-full" viewBox="0 0 100 100">
                                    <circle className="text-gray-700" strokeWidth="8" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
                                    <circle 
-                                       className={scoreColorClass} 
-                                       strokeWidth="8" 
-                                       strokeDasharray={2 * Math.PI * 45} 
-                                       strokeDashoffset={2 * Math.PI * 45 * (1 - score / 100)} 
-                                       strokeLinecap="round" 
-                                       stroke="currentColor" 
-                                       fill="transparent" 
-                                       r="45" cx="50" cy="50" 
+                                       className={scoreColorClass} strokeWidth="8" strokeDasharray={2 * Math.PI * 45} strokeDashoffset={2 * Math.PI * 45 * (1 - score / 100)} 
+                                       strokeLinecap="round" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" 
                                        style={{transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 1s ease-out'}}
                                    />
                                </svg>
@@ -437,14 +387,16 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                                   </li>
                               ))}
                            </ul>
-                            {processState === ProcessState.Approved && (
-                            <div className="text-center text-green-400 mt-4">
-                                <CheckCircle2 className="mx-auto w-8 h-8 text-green-500 mb-2" />
-                                <p className="font-semibold">Transaction Approved</p>
-                                <p className="text-sm">Your transaction was successful.</p>
+                            {(processState === ProcessState.Approved || processState === ProcessState.AwaitingOTP) && (
+                            <div className={`text-center mt-4 ${processState === ProcessState.Approved ? 'text-green-400' : 'text-yellow-400'}`}>
+                                {processState === ProcessState.Approved ? 
+                                  <CheckCircle2 className="mx-auto w-8 h-8 text-green-500 mb-2" /> : 
+                                  <BellIcon className="mx-auto w-8 h-8 text-yellow-500 mb-2" />}
+                                <p className="font-semibold">{processState === ProcessState.Approved ? 'Transaction Approved' : 'Action Required'}</p>
+                                <p className="text-sm">{processState === ProcessState.Approved ? 'Your transaction was successful.' : 'Check notifications to complete.'}</p>
                             </div>
                            )}
-                           {processState === ProcessState.Blocked && !limitError && (
+                           {processState === ProcessState.Blocked && (
                             <div className="text-center text-red-400 mt-4">
                                 <ShieldXIcon className="mx-auto w-8 h-8 text-red-500 mb-2" />
                                 <p className="font-semibold">Transaction Blocked</p>
@@ -469,44 +421,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
             <UserAnalyticsDashboard analytics={analyticsData} />
         </div>
       </div>
-      
-      {/* Action Required Modal */}
-      {processState === ProcessState.AwaitingUserAction && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-              <div className="bg-gray-800 border border-yellow-700 rounded-lg shadow-xl p-8 max-w-md w-full relative">
-                   <div className="text-center">
-                        <ShieldQuestionIcon className="mx-auto w-12 h-12 text-yellow-400 mb-4" />
-                        <h2 className="text-2xl font-bold text-yellow-400">Action Required</h2>
-                        <p className="text-gray-300 mt-2">Our AI detected unusual activity. Please review this transaction of <span className="font-bold text-white">₹{amount}</span> to <span className="font-bold text-white">{recipient}</span>.</p>
-                        <p className="text-sm text-gray-400 mt-1">Does this look right to you?</p>
-                    </div>
 
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                        <button onClick={handleUserConfirmation} className="w-full flex items-center justify-center gap-2 p-3 rounded-md bg-green-500/20 text-green-300 hover:bg-green-500/40 transition-colors font-semibold">
-                            <ThumbsUpIcon className="w-5 h-5" /> Yes, it's me
-                        </button>
-                        <button onClick={() => handleUserRejection(false)} className="w-full flex items-center justify-center gap-2 p-3 rounded-md bg-red-500/20 text-red-300 hover:bg-red-500/40 transition-colors font-semibold">
-                            <ThumbsDownIcon className="w-5 h-5" /> No, not me
-                        </button>
-                        <button onClick={() => handleUserRejection(true)} className="w-full flex items-center justify-center gap-2 p-3 rounded-md bg-gray-500/20 text-gray-300 hover:bg-gray-500/40 transition-colors font-semibold">
-                            <HandIcon className="w-5 h-5" /> Block Account
-                        </button>
-                    </div>
-              </div>
-          </div>
-      )}
-
-
-      {/* Verification Modals */}
-      <OtpModal 
-        isOpen={processState === ProcessState.VerificationOTP}
-        onClose={() => handleUserRejection(false)}
-        onSuccess={handleVerificationSuccess}
-      />
       <FaceVerificationModal
         isOpen={processState === ProcessState.VerificationBiometric}
         user={user}
-        onClose={() => handleUserRejection(false)}
+        transaction={currentTransaction}
+        onClose={handleVerificationModalClose}
         onSuccess={handleVerificationSuccess}
         onFailure={handleVerificationFailureWrapper}
       />
@@ -515,6 +435,29 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
         onClose={() => setIsScannerOpen(false)}
         onScan={handleScanSuccess}
       />
+      {isConfirmationModalOpen && transactionToConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-8 max-w-md w-full">
+            <div className="text-center">
+              <AlertTriangleIcon className="mx-auto w-12 h-12 text-yellow-400 mb-4" />
+              <h2 className="text-2xl font-bold text-yellow-300">Confirm High-Value Transaction</h2>
+              <p className="text-gray-300 mt-4 text-lg">
+                Are you sure you want to send{' '}
+                <span className="font-bold text-white">₹{transactionToConfirm.amount.toLocaleString('en-IN')}</span> to{' '}
+                <span className="font-bold text-white">{transactionToConfirm.recipient}</span>?
+              </p>
+            </div>
+            <div className="mt-8 flex justify-center gap-4">
+              <button onClick={handleCancelConfirmation} className="px-6 py-2 font-semibold rounded-md bg-gray-600 hover:bg-gray-500 text-white transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleConfirmTransaction} className="px-6 py-2 font-semibold rounded-md bg-cyan-600 hover:bg-cyan-700 text-white transition-colors">
+                Confirm & Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

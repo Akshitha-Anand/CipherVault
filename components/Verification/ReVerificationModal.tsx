@@ -1,11 +1,8 @@
 
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, UserCheckIcon, ProcessingSpinner } from '../icons';
 import { User } from '../../types';
-import { verifyFaceWithAI } from '../../services/databaseService';
+import geminiService from '../../services/geminiService';
 
 interface ReVerificationModalProps {
   isOpen: boolean;
@@ -26,14 +23,15 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
   const [failureReason, setFailureReason] = useState<string>('');
   const [verificationMessage, setVerificationMessage] = useState<string>('');
   const verificationStepIntervalRef = useRef<number | null>(null);
+  const [simulateSuccess, setSimulateSuccess] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
-      // Reset state on open
       setStatus('PENDING');
       setError(null);
       setFailureReason('');
       setVerificationMessage('');
+      setSimulateSuccess(true);
 
       const startCamera = async () => {
         try {
@@ -54,7 +52,6 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
         setStream(null);
       }
       if (verificationStepIntervalRef.current) {
-          // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
           window.clearInterval(verificationStepIntervalRef.current);
       }
     }
@@ -64,7 +61,6 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
         stream.getTracks().forEach(track => track.stop());
       }
        if (verificationStepIntervalRef.current) {
-          // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
           window.clearInterval(verificationStepIntervalRef.current);
       }
     };
@@ -94,32 +90,18 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
       const context = canvas.getContext('2d');
       if (!context) return null;
 
-      // Flip the image horizontally for a mirror effect
       context.translate(targetWidth, 0);
       context.scale(-1, 1);
       context.drawImage(video, 0, 0, targetWidth, targetHeight);
-      context.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+      context.setTransform(1, 0, 0, 1, 0, 0);
       
       return canvas.toDataURL('image/jpeg', 0.8);
   }
 
   const handleVerify = async () => {
-    if (!user.faceReferenceImages || user.faceReferenceImages.length === 0) {
-        const reason = "No reference face data found. Please complete profile setup.";
-        setFailureReason(reason);
-        setStatus('FAILED');
-        setTimeout(() => onFailure(reason), 3000);
-        return;
-    }
-    
     setStatus('VERIFYING');
 
-    const verificationSteps = [
-        "Capturing Biometrics...",
-        "Analyzing Facial Vectors...",
-        "Comparing Signatures...",
-        "Finalizing Result..."
-    ];
+    const verificationSteps = [ "Capturing Biometrics...", "Analyzing Facial Vectors...", "Finalizing Result..." ];
     let stepIndex = 0;
 
     const updateMessage = () => {
@@ -127,7 +109,6 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
         stepIndex = (stepIndex + 1) % verificationSteps.length;
     };
     updateMessage();
-    // FIX: Use window.setInterval to avoid type conflicts with Node's Timeout type.
     verificationStepIntervalRef.current = window.setInterval(updateMessage, 1500);
     
     const liveImage = captureFrame();
@@ -140,9 +121,8 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
     }
     
     try {
-        // FIX: Pass the single liveImage string to the verification service.
-        const result = await verifyFaceWithAI(user.faceReferenceImages, liveImage);
-        // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
+        const result = await geminiService.verifyFaceSimilarity(liveImage, user.faceReferenceImages || [], null, user, simulateSuccess);
+        
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
         
         if(result.match) {
@@ -154,10 +134,9 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
             setTimeout(() => onFailure(result.reason), 1000);
         }
     } catch(e) {
-        // FIX: Use window.clearInterval to avoid type conflicts with Node's Timeout type.
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
         console.error("Biometric comparison failed", e);
-        const reason = "A system error occurred during verification.";
+        const reason = e instanceof Error ? e.message : "A system error occurred during verification.";
         setFailureReason(reason);
         setStatus('FAILED');
         setTimeout(() => onFailure(reason), 1000);
@@ -209,8 +188,16 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
                                 <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover transform -scale-x-100"></video>
                             )}
                         </div>
+
+                        <div className="mt-4 flex items-center justify-center gap-4">
+                            <label htmlFor="reverifySimulateToggle" className="text-sm text-gray-400 cursor-pointer">Simulate Successful Match</label>
+                            <div className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="reverifySimulateToggle" className="sr-only peer" checked={simulateSuccess} onChange={() => setSimulateSuccess(!simulateSuccess)} />
+                                <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                            </div>
+                        </div>
                         
-                        <button onClick={handleVerify} disabled={!!error || !stream} className="mt-6 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed">
+                        <button onClick={handleVerify} disabled={!!error || !stream} className="mt-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed">
                             <CameraIcon className="mr-2 w-5 h-5" />
                             Start Re-verification
                         </button>
@@ -225,7 +212,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-      <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-8 max-w-sm w-full relative min-h-[380px] flex flex-col justify-center">
+      <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-8 max-w-sm w-full relative min-h-[420px] flex flex-col justify-center">
         <canvas ref={canvasRef} className="hidden"></canvas>
         {status === 'PENDING' && <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>}
         {renderContent()}

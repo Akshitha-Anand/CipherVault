@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTransactionStatusDistribution } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { BarChartIcon } from '../icons';
 
 interface StatusData {
@@ -23,8 +23,12 @@ const TransactionStatusChart: React.FC = () => {
 
     useEffect(() => {
         const fetchData = async () => {
-            const distribution = await getTransactionStatusDistribution();
-            setData(distribution);
+            try {
+                const distribution = await databaseService.getTransactionStatusDistribution();
+                setData(distribution);
+            } catch (error) {
+                console.error("Failed to fetch status distribution:", error);
+            }
             setLoading(false);
         };
         fetchData();

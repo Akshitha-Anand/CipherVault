@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAllTransactions } from '../../services/databaseService';
-import { Transaction, RiskLevel } from '../../types';
+import databaseService from '../../services/databaseService';
 import { AlertTriangleIcon } from '../icons';
 
 interface Hotspot {
@@ -14,21 +13,12 @@ const RiskHotspots: React.FC = () => {
 
     useEffect(() => {
         const calculateHotspots = async () => {
-            const transactions = await getAllTransactions();
-            const locationCounts: { [key: string]: number } = {};
-
-            transactions.forEach(tx => {
-                if ((tx.riskLevel === RiskLevel.High || tx.riskLevel === RiskLevel.Critical) && tx.locationName) {
-                    locationCounts[tx.locationName] = (locationCounts[tx.locationName] || 0) + 1;
-                }
-            });
-
-            const sortedHotspots = Object.entries(locationCounts)
-                .map(([location, count]) => ({ location, count }))
-                .sort((a, b) => b.count - a.count)
-                .slice(0, 5); // Top 5
-
-            setHotspots(sortedHotspots);
+            try {
+                const sortedHotspots = await databaseService.getRiskHotspots();
+                setHotspots(sortedHotspots.slice(0, 5)); // Top 5
+            } catch (error) {
+                console.error("Failed to fetch risk hotspots:", error);
+            }
             setLoading(false);
         };
         calculateHotspots();

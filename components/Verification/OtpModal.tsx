@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent, useCallback } from 'react';
 import { ShieldQuestionIcon, MessageSquareIcon } from '../icons';
 
 interface OtpModalProps {
@@ -15,44 +15,35 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const timerRef = useRef<number | null>(null);
 
+  const startCooldown = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    timerRef.current = window.setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       // Reset state when modal opens
       setOtp('');
       setError('');
-      setResendCooldown(RESEND_COOLDOWN_SECONDS); // Start cooldown immediately
-      
-      // Clear any existing timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      
-      // Start a new countdown timer
-      timerRef.current = window.setInterval(() => {
-        setResendCooldown(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!);
-            timerRef.current = null;
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-    } else {
-      // Cleanup on close
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      startCooldown();
     }
-    // Cleanup on unmount
+    // Cleanup on close or unmount
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
     };
-  }, [isOpen]);
+  }, [isOpen, startCooldown]);
 
 
   const handleSubmit = (e: FormEvent) => {
@@ -67,22 +58,9 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
 
   const handleResend = () => {
       if (resendCooldown > 0) return; // Prevent resending during cooldown
-
       // Simulate resending OTP
       console.log("Resending OTP...");
-      
-      // Reset cooldown timer
-      setResendCooldown(RESEND_COOLDOWN_SECONDS);
-      timerRef.current = window.setInterval(() => {
-        setResendCooldown(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!);
-            timerRef.current = null;
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      startCooldown();
   };
 
 

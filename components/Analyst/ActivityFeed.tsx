@@ -1,27 +1,25 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { getSuspiciousActivity, updateUserStatus, updateTransactionStatus } from '../../services/databaseService';
-import { Transaction } from '../../types';
+import databaseService from '../../services/databaseService';
+import { Transaction, RiskLevel } from '../../types';
 import { AlertTriangleIcon, CheckCircle2, ShieldOffIcon, ShieldCheckIcon, InfoIcon, ChevronUpIcon } from '../icons';
 import TransactionDetailModal from './TransactionDetailModal';
 
-const riskStyles = {
-    MEDIUM: {
+const riskStyles: Record<RiskLevel, { icon: React.ReactElement | null, borderColor: string }> = {
+    [RiskLevel.Medium]: {
         icon: <AlertTriangleIcon className="w-5 h-5 text-yellow-400" />,
         borderColor: 'border-yellow-600'
     },
-    HIGH: {
-        icon: <AlertTriangleIcon className="w-5 h-5 text-orange-400" />,
-        borderColor: 'border-orange-600'
-    },
-    CRITICAL: {
+    [RiskLevel.High]: {
         icon: <AlertTriangleIcon className="w-5 h-5 text-red-400" />,
         borderColor: 'border-red-600'
     },
-    LOW: { icon: null, borderColor: '' },
-    IDLE: { icon: null, borderColor: '' }
+    [RiskLevel.Low]: { icon: null, borderColor: '' },
 };
 
 const statusPill = (status: Transaction['status']) => {
+    // FIX: Added 'PENDING_OTP' to the styles object to cover all possible TransactionStatus types.
     const styles: { [key in Transaction['status']]: string } = {
         PENDING: 'bg-gray-500 text-white',
         APPROVED: 'bg-green-500/20 text-green-300',
@@ -30,6 +28,7 @@ const statusPill = (status: Transaction['status']) => {
         BLOCKED_BY_USER: 'bg-red-500/30 text-red-200 font-bold animate-pulse',
         CLEARED_BY_ANALYST: 'bg-cyan-500/20 text-cyan-300',
         ESCALATED: 'bg-purple-500/30 text-purple-200',
+        PENDING_OTP: 'bg-yellow-500/30 text-yellow-200',
     };
     return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${styles[status]}`}>{status.replace(/_/g, ' ')}</span>;
 };
@@ -42,8 +41,12 @@ const ActivityFeed: React.FC = () => {
 
     const fetchActivity = useCallback(async () => {
         setLoading(true);
-        const data = await getSuspiciousActivity();
-        setActivity(data);
+        try {
+            const data = await databaseService.getSuspiciousActivity();
+            setActivity(data);
+        } catch (error) {
+            console.error("Failed to fetch suspicious activity:", error);
+        }
         setLoading(false);
     }, []);
 
@@ -52,23 +55,23 @@ const ActivityFeed: React.FC = () => {
     }, [fetchActivity]);
     
     const handleBlockAccount = async (userId: string, transactionId: string) => {
-        await updateUserStatus(userId, 'BLOCKED');
-        await updateTransactionStatus(transactionId, 'BLOCKED_BY_AI');
+        await databaseService.updateUserStatus(userId, 'BLOCKED');
+        await databaseService.updateTransactionStatus(transactionId, 'BLOCKED_BY_AI');
         fetchActivity();
     };
 
     const handleMarkSafe = async (transactionId: string) => {
-        await updateTransactionStatus(transactionId, 'CLEARED_BY_ANALYST');
+        await databaseService.updateTransactionStatus(transactionId, 'CLEARED_BY_ANALYST');
         fetchActivity();
     };
 
     const handleRequestInfo = async (userId: string) => {
-        await updateUserStatus(userId, 'UNDER_REVIEW');
+        await databaseService.updateUserStatus(userId, 'UNDER_REVIEW');
         fetchActivity();
     };
     
     const handleEscalate = async (transactionId: string) => {
-        await updateTransactionStatus(transactionId, 'ESCALATED');
+        await databaseService.updateTransactionStatus(transactionId, 'ESCALATED');
         fetchActivity();
     };
 

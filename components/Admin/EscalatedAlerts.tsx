@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getEscalatedIncidents } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { VerificationIncident } from '../../types';
 import { ShieldAlertIcon } from '../icons';
 
@@ -9,8 +9,12 @@ const EscalatedAlerts: React.FC = () => {
 
     useEffect(() => {
         const fetchIncidents = async () => {
-            const data = await getEscalatedIncidents();
-            setIncidents(data);
+            try {
+                const data = await databaseService.getEscalatedIncidents();
+                setIncidents(data);
+            } catch (error) {
+                console.error("Failed to fetch escalated incidents:", error);
+            }
             setLoading(false);
         };
         fetchIncidents();

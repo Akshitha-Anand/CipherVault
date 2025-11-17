@@ -1,3 +1,4 @@
+
 export type Role = 'USER' | 'ADMIN' | 'ANALYST';
 
 export type AccountStatus = 'ACTIVE' | 'BLOCKED' | 'UNDER_REVIEW';
@@ -42,7 +43,7 @@ export interface EncryptedBankDetails {
   encryptedBranchAddress: EncryptedData;
 }
 
-export type TransactionStatus = 'PENDING' | 'APPROVED' | 'BLOCKED_BY_AI' | 'BLOCKED_BY_USER' | 'FLAGGED_BY_USER' | 'CLEARED_BY_ANALYST' | 'ESCALATED';
+export type TransactionStatus = 'PENDING' | 'APPROVED' | 'BLOCKED_BY_AI' | 'BLOCKED_BY_USER' | 'FLAGGED_BY_USER' | 'CLEARED_BY_ANALYST' | 'ESCALATED' | 'PENDING_OTP';
 
 export type TransactionType = 'UPI' | 'NEFT' | 'IMPS' | 'RTGS';
 
@@ -92,20 +93,18 @@ export interface UserAnalyticsData {
 export enum ProcessState {
   Idle = 'IDLE',
   Analyzing = 'ANALYZING',
-  AwaitingUserAction = 'AWAITING_USER_ACTION',
   VerificationOTP = 'VERIFICATION_OTP',
   VerificationBiometric = 'VERIFICATION_BIOMETRIC',
   Approved = 'APPROVED',
   Blocked = 'BLOCKED',
-  Error = 'ERROR'
+  Error = 'ERROR',
+  AwaitingOTP = 'AWAITING_OTP'
 }
 
 export enum RiskLevel {
-    Idle = 'IDLE',
     Low = 'LOW',
     Medium = 'MEDIUM',
     High = 'HIGH',
-    Critical = 'CRITICAL'
 }
 
 export type VerificationIncidentStatus = 'PENDING_REVIEW' | 'ESCALATED' | 'RESOLVED';
@@ -119,11 +118,22 @@ export interface VerificationIncident {
   status: VerificationIncidentStatus;
 }
 
+export type LocationStatus = 'PENDING' | 'SUCCESS' | 'DENIED' | 'UNAVAILABLE';
+
+export interface UserBehavioralProfile {
+  averageAmount: number;
+  stdDevAmount: number;
+  commonRecipients: string[];
+  typicalHours: { start: number; end: number };
+  transactionCount: number;
+}
+
 export enum NotificationType {
     HighRiskTransaction = 'HIGH_RISK_TRANSACTION',
     AccountBlocked = 'ACCOUNT_BLOCKED',
     AccountUnblocked = 'ACCOUNT_UNBLOCKED',
     AccountUnderReview = 'ACCOUNT_UNDER_REVIEW',
+    TransactionOTP = 'TRANSACTION_OTP',
 }
 
 export interface Notification {
@@ -134,4 +144,11 @@ export interface Notification {
     timestamp: string;
     read: boolean;
     details?: Record<string, any>;
+    transactionId?: string;
+    otpCode?: string;
+}
+
+export interface TypicalLocation {
+  city: string;
+  count: number;
 }

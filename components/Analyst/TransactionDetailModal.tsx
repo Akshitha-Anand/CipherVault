@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, User } from '../../types';
-import { getUser, getTransactionsForUser } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { UserIcon, ActivityIcon, CheckCircle2, ShieldAlertIcon } from '../icons';
 
 interface TransactionDetailModalProps {
@@ -21,10 +21,16 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ transac
 
     useEffect(() => {
         const fetchData = async () => {
-            const fetchedUser = await getUser(transaction.userId);
-            if (fetchedUser) setUser(fetchedUser);
-            const history = await getTransactionsForUser(transaction.userId);
-            setUserHistory(history.filter(t => t.id !== transaction.id).slice(0, 3)); // Get 3 most recent other txns
+            try {
+                const [fetchedUser, history] = await Promise.all([
+                    databaseService.getUser(transaction.userId),
+                    databaseService.getUserTransactions(transaction.userId)
+                ]);
+                setUser(fetchedUser);
+                setUserHistory(history.filter(t => t.id !== transaction.id).slice(0, 3));
+            } catch (error) {
+                console.error("Failed to fetch transaction details:", error);
+            }
         };
         fetchData();
     }, [transaction]);

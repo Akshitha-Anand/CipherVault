@@ -3,7 +3,7 @@ import { User, BankDetails } from '../types';
 import PersonalDetailsForm from '../components/Registration/PersonalDetailsForm';
 import BankDetailsForm from '../components/Registration/BankDetailsForm';
 import FaceCaptureForm from '../components/Registration/FaceCaptureForm';
-import { addUser, addBankDetails, getUserByEmail } from '../services/databaseService';
+import databaseService from '../services/databaseService';
 
 interface RegisterPageProps {
   onRegisterSuccess: (user: User) => void;
@@ -18,29 +18,27 @@ enum RegisterStep {
 
 export default function RegisterPage({ onRegisterSuccess, onSwitchToLogin }: RegisterPageProps) {
   const [step, setStep] = useState<RegisterStep>(RegisterStep.Personal);
-  // FIX: Omit `createdAt` from personal details type to match form data.
   const [personalDetails, setPersonalDetails] = useState<Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string } | null>(null);
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // FIX: Omit `createdAt` from details parameter type to match form data.
   const handlePersonalSubmit = async (details: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string }) => {
     setApiError(null);
-    setIsVerifying(true);
+    setIsLoading(true);
     try {
-        const existingUser = await getUserByEmail(details.email);
-        if (existingUser) {
-            setApiError('An account with this email already exists. Please log in.');
-            return; // Stop execution and stay on this step
+        // Use the mock database service
+        const { exists } = await databaseService.checkEmail(details.email);
+        if (exists) {
+            setApiError('This email address is already registered.');
+        } else {
+            setPersonalDetails(details);
+            setStep(RegisterStep.Bank);
         }
-        // If email is unique, proceed
-        setPersonalDetails(details);
-        setStep(RegisterStep.Bank);
     } catch (error) {
-        setApiError('An error occurred verifying your email. Please try again.');
+        setApiError('Could not verify email. Please try again.');
     } finally {
-        setIsVerifying(false);
+        setIsLoading(false);
     }
   };
 
@@ -51,20 +49,21 @@ export default function RegisterPage({ onRegisterSuccess, onSwitchToLogin }: Reg
   
   const handleFaceSubmit = async (faceImages: string[]) => {
     if (personalDetails && bankDetails) {
+        setIsLoading(true);
         try {
-            // The addUser service still has a final check for safety
-            const user = await addUser({ ...personalDetails, faceReferenceImages: faceImages });
-            await addBankDetails(user.id, bankDetails);
+            // Use the mock database service
+            const user = await databaseService.register({ personalDetails, bankDetails, faceImages });
             onRegisterSuccess(user);
         } catch (error) {
              if (error instanceof Error) {
                 setApiError(error.message);
-                // Go back to the first step to fix the error
                 setStep(RegisterStep.Personal);
             } else {
                 setApiError('An unknown error occurred during registration.');
                 setStep(RegisterStep.Personal);
             }
+        } finally {
+            setIsLoading(false);
         }
     }
   }
@@ -72,11 +71,11 @@ export default function RegisterPage({ onRegisterSuccess, onSwitchToLogin }: Reg
   const renderContent = () => {
     switch (step) {
       case RegisterStep.Personal:
-        return <PersonalDetailsForm onSubmit={handlePersonalSubmit} apiError={apiError} isVerifying={isVerifying} />;
+        return <PersonalDetailsForm onSubmit={handlePersonalSubmit} apiError={apiError} isLoading={isLoading} />;
       case RegisterStep.Bank:
         return <BankDetailsForm onSubmit={handleBankSubmit} />;
       case RegisterStep.FaceCapture:
-        return <FaceCaptureForm onSubmit={handleFaceSubmit} />;
+        return <FaceCaptureForm onSubmit={handleFaceSubmit} isLoading={isLoading} />;
       default:
         return <div>Error: Invalid registration step.</div>;
     }

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, AccountHealthStats, Transaction, UserAnalyticsData } from '../types';
 import UserDashboard from '../components/UserDashboard';
-import { getTransactionsForUser, getUser, createVerificationIncident, calculateAccountStabilityScore, getUserAnalytics, updateTransactionStatus } from '../services/databaseService';
+import databaseService from '../services/databaseService';
 
 interface UserPageProps {
   user: User;
@@ -14,36 +14,39 @@ export default function UserPage({ user: initialUser }: UserPageProps) {
   const [analyticsData, setAnalyticsData] = useState<UserAnalyticsData | null>(null);
 
   const fetchAllUserData = useCallback(async (user: User) => {
-    // Health stats
-    const transactions = await getTransactionsForUser(user.id);
-    const monthlySpending = transactions
-        .filter(t => new Date(t.time).getMonth() === new Date().getMonth()) // Basic month filter
-        .reduce((sum, t) => sum + t.amount, 0);
-    
-    const riskBreakdown = transactions.reduce((acc, t) => {
-        if (t.riskLevel === 'LOW') acc.low++;
-        else if (t.riskLevel === 'MEDIUM') acc.medium++;
-        else if (t.riskLevel === 'HIGH' || t.riskLevel === 'CRITICAL') acc.high++;
-        return acc;
-    }, { low: 0, medium: 0, high: 0 });
+    try {
+        const [transactions, updatedUser, stabilityScoreData, analytics] = await Promise.all([
+            databaseService.getUserTransactions(user.id),
+            databaseService.getUser(user.id),
+            databaseService.getAccountStabilityScore(user.id),
+            databaseService.getUserAnalytics(user.id)
+        ]);
 
-    const updatedUser = await getUser(user.id);
-    setCurrentUser(updatedUser || user);
+        const monthlySpending = transactions
+            .filter(t => new Date(t.time).getMonth() === new Date().getMonth())
+            .reduce((sum, t) => sum + t.amount, 0);
+        
+        const riskBreakdown = transactions.reduce((acc, t) => {
+            if (t.riskLevel === 'LOW') acc.low++;
+            else if (t.riskLevel === 'MEDIUM') acc.medium++;
+            else if (t.riskLevel === 'HIGH') acc.high++;
+            return acc;
+        }, { low: 0, medium: 0, high: 0 });
 
-    const stabilityScore = await calculateAccountStabilityScore(user.id);
+        setCurrentUser(updatedUser || user);
 
-    setAccountHealth({
-      status: updatedUser?.status === 'ACTIVE' ? 'Stable' : (updatedUser?.status === 'UNDER_REVIEW' ? 'Under Review' : 'At Risk'),
-      totalTransactions: transactions.length,
-      monthlySpending,
-      riskBreakdown,
-      stabilityScore
-    });
-    
-    // Analytics data
-    const analytics = await getUserAnalytics(user.id);
-    setAnalyticsData(analytics);
-
+        setAccountHealth({
+          status: updatedUser?.status === 'ACTIVE' ? 'Stable' : (updatedUser?.status === 'UNDER_REVIEW' ? 'Under Review' : 'At Risk'),
+          totalTransactions: transactions.length,
+          monthlySpending,
+          riskBreakdown,
+          stabilityScore: stabilityScoreData.score
+        });
+        
+        setAnalyticsData(analytics);
+    } catch (error) {
+        console.error("Failed to fetch user data:", error);
+    }
   }, []);
 
   useEffect(() => {
@@ -59,9 +62,8 @@ export default function UserPage({ user: initialUser }: UserPageProps) {
   }
 
   const handleVerificationFailure = async (transaction: Transaction, capturedImage: string) => {
-      await updateTransactionStatus(transaction.id, 'BLOCKED_BY_AI');
-      await createVerificationIncident(transaction.userId, transaction.userName, capturedImage);
-      // Re-fetch everything to show the updated "BLOCKED" status
+      await databaseService.updateTransactionStatus(transaction.id, 'BLOCKED_BY_AI');
+      await databaseService.createVerificationIncident(transaction.userId, transaction.userName, capturedImage);
       if(currentUser){
           fetchAllUserData(currentUser);
       }

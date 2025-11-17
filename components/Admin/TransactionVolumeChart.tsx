@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAllTransactions } from '../../services/databaseService';
+import databaseService from '../../services/databaseService';
 import { Transaction } from '../../types';
 import { BarChartIcon } from '../icons';
 
@@ -10,33 +10,37 @@ const TransactionVolumeChart: React.FC = () => {
 
     useEffect(() => {
         const processData = async () => {
-            const transactions = await getAllTransactions();
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            try {
+                const transactions = await databaseService.getAllTransactions();
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-            const dailyCounts = new Array(30).fill(0);
-            const dateLabels = new Array(30).fill('');
+                const dailyCounts = new Array(30).fill(0);
+                const dateLabels = new Array(30).fill('');
 
-            for (let i = 0; i < 30; i++) {
-                const date = new Date();
-                date.setDate(date.getDate() - (29 - i));
-                dateLabels[i] = `${date.toLocaleString('default', { month: 'short' })} ${date.getDate()}`;
-            }
-
-            transactions.forEach(tx => {
-                const txDate = new Date(tx.time);
-                if (txDate >= thirtyDaysAgo) {
-                    const diffTime = Math.abs(new Date().getTime() - txDate.getTime());
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                    const index = 29 - diffDays;
-                    if (index >= 0 && index < 30) {
-                        dailyCounts[index]++;
-                    }
+                for (let i = 0; i < 30; i++) {
+                    const date = new Date();
+                    date.setDate(date.getDate() - (29 - i));
+                    dateLabels[i] = `${date.toLocaleString('default', { month: 'short' })} ${date.getDate()}`;
                 }
-            });
-            
-            setData(dailyCounts);
-            setLabels(dateLabels);
+
+                transactions.forEach(tx => {
+                    const txDate = new Date(tx.time);
+                    if (txDate >= thirtyDaysAgo) {
+                        const diffTime = Math.abs(new Date().getTime() - txDate.getTime());
+                        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                        const index = 29 - diffDays;
+                        if (index >= 0 && index < 30) {
+                            dailyCounts[index]++;
+                        }
+                    }
+                });
+                
+                setData(dailyCounts);
+                setLabels(dateLabels);
+            } catch (error) {
+                console.error("Failed to fetch transaction data:", error);
+            }
             setLoading(false);
         };
         processData();
