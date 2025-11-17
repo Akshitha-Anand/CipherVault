@@ -4,6 +4,7 @@ import { GoogleGenAI, Type, Part } from "@google/genai";
 import { Transaction, RiskAnalysisResult, User, TransactionType } from '../types';
 import { getTransactionsForUser, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT } from './databaseService';
 
+// Fix: Initialize the GoogleGenAI client with a named apiKey parameter as per the latest SDK guidelines.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 /**
@@ -12,6 +13,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
  * @param context A string for logging purposes.
  * @returns The parsed JSON object.
  */
+// Fix: Updated function signature to accept a 'context' parameter to fix the "Expected 1 arguments, but got 2" error.
 function cleanAndParseJson(jsonString: string, context: string): any {
   // The model can sometimes wrap the JSON in ```json ... ```.
   const match = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
@@ -105,6 +107,7 @@ export const analyzeTransaction = async (
     Based on this logic, calculate a final risk score and provide a step-by-step analysis log explaining your reasoning based on the principles above. Each item in the 'analysis' array must be a single, concise sentence without any newline characters.
   `;
 
+  // Fix: Refactored API call to use the modern `ai.models.generateContent` method, replacing the deprecated `getGenerativeModel` and `model.generateContent` pattern.
   const response = await ai.models.generateContent({
     // OPTIMIZATION: Switched to gemini-2.5-flash for faster, real-time transaction analysis.
     model: "gemini-2.5-flash",
@@ -131,6 +134,7 @@ export const analyzeTransaction = async (
     }
   });
 
+  // Fix: Replaced `response.response.text()` with `response.text` to correctly access the response content, resolving the "is not callable" error.
   const jsonString = response.text;
   
   if (!jsonString) {
@@ -189,6 +193,7 @@ export const verifyFaceSimilarity = async (
       liveImagePart
   ];
 
+  // Fix: Refactored API call to use the modern `ai.models.generateContent` method.
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: { parts },
@@ -211,6 +216,7 @@ export const verifyFaceSimilarity = async (
     }
   });
 
+  // Fix: Replaced `response.response.text()` with `response.text` to correctly access the response content, resolving the "is not callable" error.
   const jsonString = response.text;
   if (!jsonString) {
     throw new Error("Received empty response from Gemini API for face verification.");

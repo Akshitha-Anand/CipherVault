@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, Transaction, UserAnalyticsData, AccountStatus, TransactionType } from '../types';
 import { analyzeTransaction } from '../services/geminiService';
@@ -513,3 +512,4 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
 };
 
 export default UserDashboard;
+```

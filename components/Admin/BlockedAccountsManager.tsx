@@ -125,6 +125,7 @@ const BlockedAccountsManager: React.FC = () => {
                             {toast.type === 'success' ? <UserCheckIcon className="w-6 h-6 text-green-300" /> : <InfoIcon className="w-6 h-6 text-blue-300" />}
                             <p className="text-sm text-gray-200">{toast.message}</p>
                         </div>
+                        {/* FIX: Use `toast.id` from the map function scope instead of an out-of-scope variable. */}
                         <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-gray-400 hover:text-white">
                            <XIcon className="w-5 h-5" />
                         </button>

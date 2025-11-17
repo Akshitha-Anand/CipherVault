@@ -1,8 +1,11 @@
 
+
+
 import { GoogleGenAI, Type, Part } from "@google/genai";
 import { Transaction, RiskAnalysisResult, User, TransactionType } from '../types';
 import { getTransactionsForUser, DAILY_UPI_LIMIT, WEEKLY_UPI_LIMIT, DAILY_IMPS_LIMIT, WEEKLY_IMPS_LIMIT } from './databaseService';
 
+// @google/genai-sdk: Initialize with named apiKey parameter
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
 /**
@@ -104,10 +107,11 @@ export const analyzeTransaction = async (
     Based on this logic, calculate a final risk score and provide a step-by-step analysis log explaining your reasoning based on the principles above. Each item in the 'analysis' array must be a single, concise sentence without any newline characters.
   `;
 
+  // @google/genai-sdk: Use modern ai.models.generateContent API
   const response = await ai.models.generateContent({
     // OPTIMIZATION: Switched to gemini-2.5-flash for faster, real-time transaction analysis.
     model: "gemini-2.5-flash",
-    contents: prompt,
+    contents: [{ parts: [{ text: prompt }] }],
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -130,6 +134,7 @@ export const analyzeTransaction = async (
     }
   });
 
+  // @google/genai-sdk: Use response.text to access response, fixing "not callable" error
   const jsonString = response.text;
   
   if (!jsonString) {
@@ -188,6 +193,7 @@ export const verifyFaceSimilarity = async (
       liveImagePart
   ];
 
+  // @google/genai-sdk: Use modern ai.models.generateContent API
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: { parts },
@@ -210,6 +216,7 @@ export const verifyFaceSimilarity = async (
     }
   });
 
+  // @google/genai-sdk: Use response.text to access response, fixing "not callable" error
   const jsonString = response.text;
   if (!jsonString) {
     throw new Error("Received empty response from Gemini API for face verification.");

@@ -382,12 +382,14 @@ export const createVerificationIncident = async (userId: string, userName: strin
 export const getPendingIncidents = async (): Promise<VerificationIncident[]> => {
     return db.verificationIncidents
         .filter(inc => inc.status === 'PENDING_REVIEW')
+        // FIX: Use `a.timestamp` for sorting instead of `a.time` which does not exist on the type.
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
 
 export const getEscalatedIncidents = async (): Promise<VerificationIncident[]> => {
      return db.verificationIncidents
         .filter(inc => inc.status === 'ESCALATED')
+        // FIX: Use `a.timestamp` for sorting instead of `a.time` which does not exist on the type.
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
 

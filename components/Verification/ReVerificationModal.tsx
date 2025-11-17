@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, UserCheckIcon, ProcessingSpinner } from '../icons';
 import { User } from '../../types';
