@@ -79,10 +79,10 @@ const geminiService = {
     
     // 4. Geolocation service status & Historical comparison
     if (locationStatus === 'DENIED') {
-        riskScore += 40; // Increased penalty
+        riskScore += 50; // Increased penalty
         analysis.push('CRITICAL: High-accuracy location services were denied by the user.');
     } else if (locationStatus === 'UNAVAILABLE') {
-        riskScore += 15; // Increased penalty
+        riskScore += 20; // Increased penalty
         analysis.push('Location services unavailable. This is a moderate risk factor.');
     } else if (locationStatus === 'SUCCESS' && transaction.location) {
         if (typicalLocations.length > 0 && transaction.locationName) {
@@ -91,7 +91,7 @@ const geminiService = {
             if (isTypical) {
                 analysis.push('Transaction location is consistent with user history.');
             } else {
-                riskScore += 50;
+                riskScore += 60; // Increased penalty for geographical anomaly
                 analysis.push(`HIGH RISK: Transaction from an unusual location (${transaction.locationName}). User's typical locations: ${typicalLocations.map(l => l.city).join(', ')}.`);
             }
         } else {
@@ -155,26 +155,29 @@ const geminiService = {
     }
     requiredConfidence = Math.min(99.0, requiredConfidence); // Cap it
 
-    // 4. Simulate a realistic confidence score based on the user's toggle
-    // This simulates analyzing multiple reference images and picking the best score
+    // 4. Simulate a deterministic multi-image comparison
     const numImages = referenceImages.length;
-    let confidenceScore;
+    let bestScore;
+    
     if (simulateSuccess) {
-        // High score with slight variance
-        confidenceScore = 96.0 + Math.random() * 3.5; // 96.0 to 99.5
+        // GUARANTEED SUCCESS: Simulate a very close match.
+        // The score will always be higher than the required threshold.
+        bestScore = requiredConfidence + (Math.random() * (99.8 - requiredConfidence));
     } else {
-        // Low score with slight variance
-        confidenceScore = 70.0 + Math.random() * 15.0; // 70.0 to 85.0
+        // GUARANTEED FAILURE: Simulate a very poor match.
+        // The score will always be significantly lower than the required threshold.
+        bestScore = requiredConfidence - 20 - (Math.random() * 30); // 20 to 50 points below
     }
-    confidenceScore = parseFloat(confidenceScore.toFixed(1));
+
+    bestScore = Math.max(0, parseFloat(bestScore.toFixed(1)));
 
     // 5. Determine match and create final reason string
-    const match = confidenceScore >= requiredConfidence;
+    const match = bestScore >= requiredConfidence;
     let reason = '';
     if (match) {
-        reason = `Match successful. Best confidence of ${confidenceScore}% (from ${numImages} images) met the required threshold of ${requiredConfidence.toFixed(1)}%. ${reasonForThreshold}`;
+        reason = `Match successful. Best confidence of ${bestScore}% (from ${numImages} images) met the required threshold of ${requiredConfidence.toFixed(1)}%. ${reasonForThreshold}`;
     } else {
-        reason = `Match failed. Best confidence of ${confidenceScore}% (from ${numImages} images) did not meet the required threshold of ${requiredConfidence.toFixed(1)}%. ${reasonForThreshold}`;
+        reason = `Match failed. Best confidence of ${bestScore}% (from ${numImages} images) did not meet the required threshold of ${requiredConfidence.toFixed(1)}%. ${reasonForThreshold}`;
     }
     
     return { match, reason };

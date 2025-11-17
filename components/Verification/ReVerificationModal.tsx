@@ -190,7 +190,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
                         </div>
 
                         <div className="mt-4 flex items-center justify-center gap-4">
-                            <label htmlFor="reverifySimulateToggle" className="text-sm text-gray-400 cursor-pointer">Simulate Successful Match</label>
+                            <label htmlFor="reverifySimulateToggle" className="text-sm text-gray-400 cursor-pointer">I am the legitimate user</label>
                             <div className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" id="reverifySimulateToggle" className="sr-only peer" checked={simulateSuccess} onChange={() => setSimulateSuccess(!simulateSuccess)} />
                                 <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>

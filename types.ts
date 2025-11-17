@@ -1,4 +1,3 @@
-
 export type Role = 'USER' | 'ADMIN' | 'ANALYST';
 
 export type AccountStatus = 'ACTIVE' | 'BLOCKED' | 'UNDER_REVIEW';
@@ -98,7 +97,6 @@ export enum ProcessState {
   Approved = 'APPROVED',
   Blocked = 'BLOCKED',
   Error = 'ERROR',
-  AwaitingOTP = 'AWAITING_OTP'
 }
 
 export enum RiskLevel {
@@ -133,7 +131,7 @@ export enum NotificationType {
     AccountBlocked = 'ACCOUNT_BLOCKED',
     AccountUnblocked = 'ACCOUNT_UNBLOCKED',
     AccountUnderReview = 'ACCOUNT_UNDER_REVIEW',
-    TransactionOTP = 'TRANSACTION_OTP',
+    MediumRiskAlert = 'MEDIUM_RISK_ALERT',
 }
 
 export interface Notification {
@@ -143,9 +141,7 @@ export interface Notification {
     type: NotificationType;
     timestamp: string;
     read: boolean;
-    details?: Record<string, any>;
     transactionId?: string;
-    otpCode?: string;
 }
 
 export interface TypicalLocation {

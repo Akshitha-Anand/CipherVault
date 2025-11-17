@@ -11,7 +11,7 @@ let notifications: Notification[] = [];
 // --- UTILITIES ---
 const hashPassword = (password: string) => `hashed_${password}_${uuidv4()}`;
 const verifyPassword = (password: string, hash: string) => hash.startsWith(`hashed_${password}_`);
-const createNotification = (userId: string, type: NotificationType, message: string, details: Record<string, any> & {transactionId?: string, otpCode?: string} = {}) => {
+const createNotification = (userId: string, type: NotificationType, message: string, details: { transactionId?: string; } = {}) => {
     const newNotif: Notification = { 
         id: uuidv4(), 
         userId, 
@@ -20,8 +20,6 @@ const createNotification = (userId: string, type: NotificationType, message: str
         read: false, 
         timestamp: new Date().toISOString(),
         transactionId: details.transactionId,
-        otpCode: details.otpCode,
-        details,
      };
     notifications.unshift(newNotif);
     console.log(`NOTIFICATION for ${userId}: ${message}`);
@@ -132,7 +130,7 @@ const initMockData = () => {
     });
 
     // User 3 (Charlie) - A medium risk transaction for analyst review
-    transactions.unshift({
+    const medRiskTx: Transaction = {
         id: uuidv4(),
         userId: user3.id, userName: user3.name,
         recipient: 'Online Gaming Platform', amount: 45000, type: 'UPI',
@@ -140,9 +138,9 @@ const initMockData = () => {
         time: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
         riskLevel: RiskLevel.Medium, riskScore: 55, status: 'PENDING_OTP',
         aiAnalysisLog: ['Medium-high transaction value.', 'Recipient associated with higher chargeback rates.'],
-    });
-    // Corresponding OTP notification for Charlie's transaction
-    createNotification(user3.id, NotificationType.TransactionOTP, `An OTP is required to complete your transaction of ₹45,000 to Online Gaming Platform.`, { transactionId: transactions[0].id, otpCode: "123456" });
+    };
+    transactions.unshift(medRiskTx);
+    createNotification(user3.id, NotificationType.MediumRiskAlert, `A transaction of ₹45,000 to Online Gaming Platform requires OTP verification. The mock OTP is 123456.`, { transactionId: medRiskTx.id });
 
 
     // --- Verification Incidents ---
@@ -213,10 +211,14 @@ export const createTransaction = (txData: Omit<Transaction, 'id' | 'userName' | 
     transactions.unshift(newTransaction);
     
     if (newTransaction.riskLevel === 'HIGH') {
-        createNotification(txData.userId, NotificationType.HighRiskTransaction, `A high-risk transaction of ₹${txData.amount} was initiated.`, { transactionId: newTransaction.id });
+        createNotification(txData.userId, NotificationType.HighRiskTransaction, `A high-risk transaction of ₹${txData.amount} to ${txData.recipient} requires your attention.`);
     } else if (newTransaction.riskLevel === 'MEDIUM') {
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        createNotification(txData.userId, NotificationType.TransactionOTP, `Enter OTP ${otp} to complete your transaction of ₹${txData.amount} to ${txData.recipient}.`, { transactionId: newTransaction.id, otpCode: otp });
+        createNotification(
+            txData.userId, 
+            NotificationType.MediumRiskAlert, 
+            `A transaction of ₹${txData.amount} to ${txData.recipient} requires OTP verification. The mock OTP is 123456.`, 
+            { transactionId: newTransaction.id }
+        );
     }
 
     return newTransaction;
@@ -233,16 +235,15 @@ export const updateTransactionStatus = (transactionId: string, status: Transacti
     }
 };
 
-export const verifyTransactionOtp = (transactionId: string, otp: string): boolean => {
-    const notification = notifications.find(n => n.transactionId === transactionId && n.type === NotificationType.TransactionOTP);
-    if (notification && notification.otpCode === otp) {
+export const verifyTransactionOtp = (transactionId: string, otp: string): { success: boolean } => {
+    // For this mock, we use a simple hardcoded OTP. In a real app, this would be a secure check.
+    const MOCK_OTP = '123456';
+    if (otp === MOCK_OTP) {
         updateTransactionStatus(transactionId, 'APPROVED');
-        notification.read = true; 
-        notification.message = `Transaction of ₹${transactions.find(t=>t.id===transactionId)?.amount} was successfully verified with OTP.`;
-        return true;
+        return { success: true };
     }
     updateTransactionStatus(transactionId, 'BLOCKED_BY_USER');
-    return false;
+    return { success: false };
 };
 
 export const calculateAccountStability = (userId: string): number => {

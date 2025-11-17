@@ -4,8 +4,9 @@ import { User, RiskAnalysisResult, RiskLevel, ProcessState, AccountHealthStats, 
 import databaseService from '../services/databaseService';
 import geminiService from '../services/geminiService';
 import { useDebounce } from '../hooks/useDebounce';
-import { CheckCircle2, CpuIcon, AlertTriangleIcon, UserIcon, ShieldXIcon, QrCodeIcon, InfoIcon, BellIcon } from './icons';
+import { CheckCircle2, CpuIcon, AlertTriangleIcon, UserIcon, ShieldXIcon, QrCodeIcon, InfoIcon, ShieldQuestionIcon, MessageSquareIcon } from './icons';
 import FaceVerificationModal from './Verification/FaceVerificationModal';
+import OtpModal from './Verification/OtpModal';
 import AccountHealthDashboard from './AccountHealthDashboard';
 import QRScannerModal from './Verification/QRScannerModal';
 import UserAnalyticsDashboard from './User/UserAnalyticsDashboard';
@@ -128,7 +129,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
             setProcessState(ProcessState.Approved);
             break;
         case RiskLevel.Medium:
-            setProcessState(ProcessState.AwaitingOTP);
+            setProcessState(ProcessState.VerificationOTP);
             break;
         case RiskLevel.High:
             setProcessState(ProcessState.VerificationBiometric);
@@ -176,7 +177,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
       handleAnalysis(debouncedAmount);
   }, [debouncedAmount, recipient, handleAnalysis]);
   
-  const handleVerificationModalClose = async () => {
+  const handleBlockTransaction = async () => {
     setProcessState(ProcessState.Blocked);
     if(currentTransaction){
         await databaseService.updateTransactionStatus(currentTransaction.id, 'BLOCKED_BY_USER');
@@ -208,7 +209,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
     setError(null);
   }, [onTransactionComplete, fetchTransactionTotals, type]);
 
-  const isFinalState = processState === ProcessState.Approved || processState === ProcessState.Blocked || processState === ProcessState.AwaitingOTP;
+  const isFinalState = processState === ProcessState.Approved || processState === ProcessState.Blocked;
 
   useEffect(() => {
       if (isFinalState) {
@@ -242,7 +243,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
       if(error) return <div className="text-red-400 font-semibold">{error}</div>
       if(processState === ProcessState.Approved) return <div className="text-green-400 font-semibold">Transaction Approved</div>
       if(processState === ProcessState.Blocked) return <div className="text-red-400 font-semibold">Transaction Blocked & Notified</div>
-      if(processState === ProcessState.AwaitingOTP) return <div className="text-yellow-400 font-semibold flex items-center justify-center gap-2"><BellIcon className="w-4 h-4" /> OTP sent to Notifications</div>
+      if(processState === ProcessState.VerificationOTP) return <div className="text-yellow-400 font-semibold flex items-center justify-center gap-2"><ShieldQuestionIcon className="w-4 h-4" /> Awaiting OTP Verification...</div>
       if(processState === ProcessState.VerificationBiometric) return <div className="text-yellow-400 font-semibold">Face Verification Required</div>
       if(isConfirmationModalOpen) return <div className="text-yellow-400 font-semibold">Awaiting Confirmation</div>
       if(processState === ProcessState.Analyzing) return <div className="text-cyan-400 animate-pulse">Analyzing...</div>
@@ -308,7 +309,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                         {(['UPI', 'IMPS', 'NEFT', 'RTGS'] as TransactionType[]).map(txType => (
                             <button key={txType} onClick={() => setType(txType)}
                                 className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${ type === txType ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600' }`}
-                                disabled={isFinalState || user.status === 'BLOCKED'} >
+                                disabled={isFinalState || processState !== ProcessState.Idle || user.status === 'BLOCKED'} >
                                 {txType}
                             </button>
                         ))}
@@ -323,10 +324,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                       <input type="text" id="recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)}
                         className="block w-full rounded-md border-gray-600 bg-gray-900/50 pl-10 py-2 focus:border-cyan-500 focus:ring-cyan-500"
                         placeholder="UPI, mobile number, or contact"
-                        disabled={isFinalState || user.status === 'BLOCKED'}
+                        disabled={isFinalState || processState !== ProcessState.Idle || user.status === 'BLOCKED'}
                       />
-                      <button onClick={() => setIsScannerOpen(true)} className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-cyan-400"  disabled={isFinalState || user.status === 'BLOCKED'}>
-                        <QrCodeIcon className="w-5 w-5" />
+                      <button onClick={() => setIsScannerOpen(true)} className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-cyan-400"  disabled={isFinalState || processState !== ProcessState.Idle || user.status === 'BLOCKED'}>
+                        <QrCodeIcon className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -339,7 +340,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                       <input type="number" id="amount" value={amount} onChange={(e) => handleAmountChange(e.target.value)}
                         className="block w-full rounded-md border-gray-600 bg-gray-900/50 pl-7 py-2 focus:border-cyan-500 focus:ring-cyan-500"
                         placeholder="0.00"
-                         disabled={isFinalState || user.status === 'BLOCKED'}
+                         disabled={isFinalState || processState !== ProcessState.Idle || user.status === 'BLOCKED'}
                       />
                     </div>
                   </div>
@@ -387,13 +388,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                                   </li>
                               ))}
                            </ul>
-                            {(processState === ProcessState.Approved || processState === ProcessState.AwaitingOTP) && (
-                            <div className={`text-center mt-4 ${processState === ProcessState.Approved ? 'text-green-400' : 'text-yellow-400'}`}>
-                                {processState === ProcessState.Approved ? 
-                                  <CheckCircle2 className="mx-auto w-8 h-8 text-green-500 mb-2" /> : 
-                                  <BellIcon className="mx-auto w-8 h-8 text-yellow-500 mb-2" />}
-                                <p className="font-semibold">{processState === ProcessState.Approved ? 'Transaction Approved' : 'Action Required'}</p>
-                                <p className="text-sm">{processState === ProcessState.Approved ? 'Your transaction was successful.' : 'Check notifications to complete.'}</p>
+                            {processState === ProcessState.Approved && (
+                            <div className={`text-center mt-4 text-green-400`}>
+                                <CheckCircle2 className="mx-auto w-8 h-8 text-green-500 mb-2" />
+                                <p className="font-semibold">Transaction Approved</p>
+                                <p className="text-sm">Your transaction was successful.</p>
                             </div>
                            )}
                            {processState === ProcessState.Blocked && (
@@ -422,11 +421,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
         </div>
       </div>
 
+      <OtpModal
+        isOpen={processState === ProcessState.VerificationOTP}
+        transaction={currentTransaction}
+        onBlock={handleBlockTransaction}
+        onSuccess={handleVerificationSuccess}
+      />
       <FaceVerificationModal
         isOpen={processState === ProcessState.VerificationBiometric}
         user={user}
         transaction={currentTransaction}
-        onClose={handleVerificationModalClose}
+        onClose={handleBlockTransaction}
         onSuccess={handleVerificationSuccess}
         onFailure={handleVerificationFailureWrapper}
       />

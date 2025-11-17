@@ -1,18 +1,23 @@
+
 import React, { useState, useEffect, useRef, FormEvent, useCallback } from 'react';
 import { ShieldQuestionIcon, MessageSquareIcon } from '../icons';
+import { Transaction } from '../../types';
+import databaseService from '../../services/databaseService';
 
 interface OtpModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  transaction: Transaction | null;
+  onBlock: () => void;
   onSuccess: () => void;
 }
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
-const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const OtpModal: React.FC<OtpModalProps> = ({ isOpen, transaction, onBlock, onSuccess }) => {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const timerRef = useRef<number | null>(null);
 
   const startCooldown = useCallback(() => {
@@ -32,12 +37,10 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
 
   useEffect(() => {
     if (isOpen) {
-      // Reset state when modal opens
       setOtp('');
       setError('');
       startCooldown();
     }
-    // Cleanup on close or unmount
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -46,19 +49,26 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
   }, [isOpen, startCooldown]);
 
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // In a real app, you'd verify the OTP. Here we just check for a 6-digit code.
-    if (otp.match(/^\d{6}$/)) {
+    if (!transaction || !otp.match(/^\d{6}$/)) {
+        setError('Invalid OTP. Please enter the 6-digit code.');
+        return;
+    }
+    setIsLoading(true);
+    const result = await databaseService.verifyTransactionOtp(transaction.id, otp);
+
+    if (result.success) {
       onSuccess();
     } else {
-      setError('Invalid OTP. Please enter the 6-digit code.');
+      setError('Incorrect OTP. The transaction has been blocked for your security.');
+      setTimeout(onBlock, 2000);
     }
+    setIsLoading(false);
   };
 
   const handleResend = () => {
-      if (resendCooldown > 0) return; // Prevent resending during cooldown
-      // Simulate resending OTP
+      if (resendCooldown > 0) return;
       console.log("Resending OTP...");
       startCooldown();
   };
@@ -69,11 +79,11 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
       <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-8 max-w-sm w-full relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+        <button onClick={onBlock} className="absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
         <div className="text-center">
             <ShieldQuestionIcon className="mx-auto w-12 h-12 text-yellow-400 mb-4" />
             <h2 className="text-2xl font-bold text-yellow-400">OTP Verification Required</h2>
-            <p className="text-gray-300 mt-2">For your security, please enter the 6-digit code sent to your registered mobile number.</p>
+            <p className="text-gray-300 mt-2">A code has been sent via notification. Please enter it below to complete your transaction.</p>
         </div>
         <form onSubmit={handleSubmit} className="mt-6">
             <div className="relative">
@@ -87,9 +97,10 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
                     maxLength={6}
                     className="block w-full text-center tracking-[1em] text-2xl font-mono rounded-md border-gray-600 bg-gray-900/50 py-3 pl-12 pr-4 focus:border-yellow-500 focus:ring-yellow-500"
                     placeholder="∙∙∙∙∙∙"
+                    disabled={isLoading || !!error}
                 />
             </div>
-            {error && <p className="text-red-400 text-sm mt-2 text-center">{error}</p>}
+            {error ? <p className="text-red-400 text-sm mt-2 text-center h-5">{error}</p> : <div className="h-5 mt-2"></div>}
             
             <div className="mt-4 text-center text-sm text-gray-400">
                 Didn't receive code?{' '}
@@ -104,8 +115,8 @@ const OtpModal: React.FC<OtpModalProps> = ({ isOpen, onClose, onSuccess }) => {
                 )}
             </div>
 
-            <button type="submit" className="mt-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-gray-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-gray-900">
-                Verify Transaction
+            <button type="submit" disabled={isLoading || !!error} className="mt-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-gray-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">
+                {isLoading ? 'Verifying...' : 'Verify Transaction'}
             </button>
         </form>
       </div>

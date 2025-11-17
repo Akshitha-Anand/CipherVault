@@ -38,7 +38,7 @@ const databaseService = {
         return Promise.resolve({ success: true });
     },
     verifyTransactionOtp: (transactionId: string, otp: string): Promise<{ success: boolean }> => {
-        return Promise.resolve({ success: db.verifyTransactionOtp(transactionId, otp) });
+        return Promise.resolve(db.verifyTransactionOtp(transactionId, otp));
     },
 
     // Verification
