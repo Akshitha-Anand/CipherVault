@@ -114,6 +114,39 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
     verificationStepIntervalRef.current = window.setInterval(updateMessage, 1500);
     
     const liveImage = captureFrame();
+
+    // --- CAMERA BLACKOUT DETECTION ---
+    const canvas = canvasRef.current;
+    if (canvas && liveImage) {
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (context) {
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            let darkPixels = 0;
+            const pixelCount = data.length / 4;
+            const sampleRate = 100; // Sample 1% of pixels
+            for (let i = 0; i < data.length; i += 4 * sampleRate) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                if (r < 15 && g < 15 && b < 15) {
+                    darkPixels++;
+                }
+            }
+            
+            const totalSampled = Math.ceil(pixelCount / sampleRate);
+            if (darkPixels / totalSampled > 0.95) { // If > 95% of sampled pixels are dark
+                if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
+                const reason = "Verification failed. Camera feed was obscured or unavailable.";
+                setFailureReason(reason);
+                setStatus('FAILED');
+                setTimeout(() => onFailure(reason), 1000); 
+                return;
+            }
+        }
+    }
+    // --- END BLACKOUT DETECTION ---
+    
     if (!liveImage) {
         const reason = "Could not capture image from camera.";
         setFailureReason(reason);

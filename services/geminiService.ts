@@ -1,8 +1,25 @@
+
 import { User, Transaction, RiskAnalysisResult, RiskLevel, LocationStatus } from '../types';
 import databaseService from './databaseService';
 
 // This is a MOCK Gemini service. It simulates the responses of the real Gemini API
 // to provide a fast and predictable development experience without actual API calls.
+
+// --- Helper functions for more realistic AI simulation ---
+
+// Creates a random "vector" (an array of numbers) to represent a face.
+const createFaceVector = (): number[] => Array.from({ length: 128 }, () => Math.random() * 2 - 1);
+
+// Calculates the cosine similarity between two vectors. Result is between -1 and 1.
+// 1 means identical, 0 means orthogonal, -1 means opposite.
+const calculateCosineSimilarity = (vecA: number[], vecB: number[]): number => {
+    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+    const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+    const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+    if (magnitudeA === 0 || magnitudeB === 0) return 0;
+    return dotProduct / (magnitudeA * magnitudeB);
+};
+
 
 const geminiService = {
   analyzeTransaction: async (
@@ -134,55 +151,55 @@ const geminiService = {
       return { match: false, reason: "No reference images found for this user." };
     }
     
-    // 1. GENDER MISMATCH CHECK (NEW)
+    // 1. GENDER MISMATCH CHECK
     if (user.gender !== 'OTHER' && simulatedGender !== 'OTHER' && user.gender !== simulatedGender) {
         return { match: false, reason: `Match failed with 100% certainty. Obvious gender mismatch detected. User profile is ${user.gender}, simulation was ${simulatedGender}.`};
     }
 
-    // 2. Determine base confidence threshold
-    let requiredConfidence = 90.0;
-    let reasonForThreshold = `Base threshold: ${requiredConfidence.toFixed(1)}%.`;
+    // 2. Determine base similarity threshold (0.0 to 1.0 scale)
+    let requiredSimilarity = 0.90;
+    let reasonForThreshold = `Base threshold: ${requiredSimilarity.toFixed(2)}.`;
 
     // 3. Adjust threshold based on transaction risk
     if (transaction?.riskLevel === RiskLevel.High) {
-      requiredConfidence = 95.0;
-      reasonForThreshold = `High-Risk Transaction threshold: ${requiredConfidence.toFixed(1)}%.`;
+      requiredSimilarity = 0.95;
+      reasonForThreshold = `High-Risk Transaction threshold: ${requiredSimilarity.toFixed(2)}.`;
     } else if (transaction?.riskLevel === RiskLevel.Medium) {
-      requiredConfidence = 92.5;
-      reasonForThreshold = `Medium-Risk Transaction threshold: ${requiredConfidence.toFixed(1)}%.`;
+      requiredSimilarity = 0.925;
+      reasonForThreshold = `Medium-Risk Transaction threshold: ${requiredSimilarity.toFixed(2)}.`;
     }
 
     // 4. Adjust threshold for new users
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     if (new Date(user.createdAt) > oneWeekAgo) {
-      requiredConfidence += 1.5;
-      reasonForThreshold += ` Stricter check (+1.5%) for new user account.`;
+      requiredSimilarity += 0.015;
+      reasonForThreshold += ` Stricter check (+0.015) for new user account.`;
     }
-    requiredConfidence = Math.min(99.0, requiredConfidence); // Cap it
+    requiredSimilarity = Math.min(0.99, requiredSimilarity); // Cap it
 
-    // 5. Simulate a deterministic multi-image comparison
-    const numImages = referenceImages.length;
-    let bestScore;
+    // 5. Simulate a deterministic vector-based comparison
+    const referenceVectors = referenceImages.map(() => createFaceVector());
+    let liveVector;
     
     if (simulateSuccess) {
-        // GUARANTEED SUCCESS: Simulate a very close match.
-        // The score will always be higher than the required threshold.
-        bestScore = requiredConfidence + (Math.random() * (99.8 - requiredConfidence));
+        // GUARANTEED SUCCESS: Simulate a live vector that is very similar to a reference vector.
+        const referenceToMatch = referenceVectors[0];
+        liveVector = referenceToMatch.map(val => val + (Math.random() - 0.5) * 0.1); // Add tiny noise
     } else {
-        // GUARANTEED FAILURE: Simulate a very poor match.
-        // The score will always be significantly lower than the required threshold.
-        bestScore = requiredConfidence - 20 - (Math.random() * 30); // 20 to 50 points below
+        // GUARANTEED FAILURE: Simulate a completely different face vector.
+        liveVector = createFaceVector();
     }
-
-    bestScore = Math.max(0, parseFloat(bestScore.toFixed(1)));
+    
+    const similarities = referenceVectors.map(refVec => calculateCosineSimilarity(liveVector, refVec));
+    const bestSimilarity = Math.max(...similarities);
 
     // 6. Determine match and create final reason string
-    const match = bestScore >= requiredConfidence;
+    const match = bestSimilarity >= requiredSimilarity;
     let reason = '';
     if (match) {
-        reason = `Match successful. Best confidence of ${bestScore}% (from ${numImages} images) met the required threshold of ${requiredConfidence.toFixed(1)}%. ${reasonForThreshold}`;
+        reason = `Match successful. Best vector similarity of ${bestSimilarity.toFixed(3)} (from ${referenceImages.length} images) met the required threshold of ${requiredSimilarity.toFixed(2)}. ${reasonForThreshold}`;
     } else {
-        reason = `Match failed. Best confidence of ${bestScore}% (from ${numImages} images) did not meet the required threshold of ${requiredConfidence.toFixed(1)}%. ${reasonForThreshold}`;
+        reason = `Match failed. Best vector similarity of ${bestSimilarity.toFixed(3)} (from ${referenceImages.length} images) did not meet the required threshold of ${requiredSimilarity.toFixed(2)}. ${reasonForThreshold}`;
     }
     
     return { match, reason };
