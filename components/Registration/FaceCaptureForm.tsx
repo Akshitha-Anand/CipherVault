@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { CameraIcon, RefreshCwIcon, ShieldCheckIcon, XIcon, ArrowUpTrayIcon } from '../icons';
+import { CameraIcon, ShieldCheckIcon, XIcon, ArrowUpTrayIcon, CpuIcon } from '../icons';
+import geminiService from '../../services/geminiService';
 
 interface FaceCaptureFormProps {
-  onSubmit: (faceImages: string[]) => void;
+  onSubmit: (faceImages: string[], detectedGender: 'MALE' | 'FEMALE' | 'OTHER') => void;
   isLoading: boolean;
 }
 
@@ -17,6 +17,8 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [aiDetectedGender, setAiDetectedGender] = useState<'MALE' | 'FEMALE' | 'OTHER' | null>(null);
+  const [isClassifying, setIsClassifying] = useState(false);
 
   const startCamera = async () => {
     if (stream) {
@@ -43,6 +45,26 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
       }
     };
   }, []);
+  
+  const classifyGender = async (image: string) => {
+    setIsClassifying(true);
+    try {
+      const result = await geminiService.analyzeRegistrationFace(image);
+      setAiDetectedGender(result.gender);
+    } catch (e) {
+      console.error("Gender classification failed", e);
+      // Fallback or show error
+    } finally {
+      setIsClassifying(false);
+    }
+  };
+  
+  const addImageAndClassify = (image: string) => {
+    if (capturedImages.length === 0) {
+      classifyGender(image);
+    }
+    setCapturedImages(prev => [...prev, image]);
+  };
 
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current || capturedImages.length >= MAX_IMAGES) return;
@@ -61,7 +83,7 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
     }
     
     const image = canvas.toDataURL('image/jpeg', 0.8);
-    setCapturedImages(prev => [...prev, image]);
+    addImageAndClassify(image);
   };
   
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,12 +98,11 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
             const reader = new FileReader();
             reader.onloadend = () => {
                 if (typeof reader.result === 'string') {
-                    setCapturedImages(prev => [...prev, reader.result as string]);
+                    addImageAndClassify(reader.result as string);
                 }
             };
             reader.readAsDataURL(file);
         });
-        // Reset file input to allow selecting the same file again
         e.target.value = '';
     }
   };
@@ -92,12 +113,21 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
 
 
   const handleDeleteImage = (index: number) => {
-    setCapturedImages(prev => prev.filter((_, i) => i !== index));
+    const isFirstImage = index === 0;
+    setCapturedImages(prev => {
+        const newImages = prev.filter((_, i) => i !== index);
+        if (isFirstImage && newImages.length > 0) {
+            classifyGender(newImages[0]); // Re-classify with the new first image
+        } else if (newImages.length === 0) {
+            setAiDetectedGender(null); // Reset if no images left
+        }
+        return newImages;
+    });
   };
 
   const handleSubmit = () => {
-    if (capturedImages.length >= MIN_IMAGES) {
-      onSubmit(capturedImages);
+    if (capturedImages.length >= MIN_IMAGES && aiDetectedGender) {
+      onSubmit(capturedImages, aiDetectedGender);
     }
   };
 
@@ -113,7 +143,7 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
         accept="image/png, image/jpeg"
       />
       <h2 className="text-2xl font-semibold mb-2 text-cyan-300">Biometric Setup</h2>
-      <p className="text-gray-400 mb-6">Capture or upload at least {MIN_IMAGES} clear photos of your face.</p>
+      <p className="text-gray-400 mb-6">Capture or upload at least {MIN_IMAGES} clear photos of your face for AI analysis.</p>
       
       <div className="w-full aspect-square bg-gray-900 rounded-md flex items-center justify-center overflow-hidden relative">
         {error ? (
@@ -131,7 +161,7 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
       <div className="grid grid-cols-2 gap-4 mt-4">
         <button 
           onClick={handleCapture} 
-          disabled={!!error || !stream || isLoading || capturedImages.length >= MAX_IMAGES} 
+          disabled={!!error || !stream || isLoading || isClassifying || capturedImages.length >= MAX_IMAGES} 
           className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           <CameraIcon className="mr-2 w-5 h-5" /> 
@@ -140,7 +170,7 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
         <button 
           type="button"
           onClick={triggerFileUpload}
-          disabled={isLoading || capturedImages.length >= MAX_IMAGES}
+          disabled={isLoading || isClassifying || capturedImages.length >= MAX_IMAGES}
           className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-600 text-base font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed"
         >
           <ArrowUpTrayIcon className="mr-2 w-5 h-5" />
@@ -151,6 +181,16 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
             {capturedImages.length} of {MAX_IMAGES} images added.
         </p>
 
+      {isClassifying && (
+        <div className="text-center text-cyan-300 text-sm mt-2 flex items-center justify-center gap-2 animate-pulse">
+            <CpuIcon className="w-4 h-4" /> Analyzing first image...
+        </div>
+      )}
+      {aiDetectedGender && !isClassifying && (
+        <div className="text-center text-green-300 text-sm mt-2">
+            AI Detected Gender: <span className="font-bold">{aiDetectedGender}</span>
+        </div>
+      )}
 
       {capturedImages.length > 0 && (
         <div className="mt-4">
@@ -175,11 +215,11 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
       <div className="mt-6">
         <button 
           onClick={handleSubmit} 
-          disabled={isLoading || capturedImages.length < MIN_IMAGES} 
+          disabled={isLoading || isClassifying || capturedImages.length < MIN_IMAGES || !aiDetectedGender} 
           className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ShieldCheckIcon className="mr-2 w-5 h-5" /> 
-          {isLoading ? 'Processing...' : `Confirm & Finish (${capturedImages.length})`}
+          {isLoading ? 'Creating Account...' : `Confirm & Finish (${capturedImages.length})`}
         </button>
         {capturedImages.length < MIN_IMAGES && (
             <p className="text-center text-yellow-400 text-xs mt-2">

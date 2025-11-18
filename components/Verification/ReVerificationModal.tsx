@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, UserCheckIcon, ProcessingSpinner } from '../icons';
+import { ShieldAlertIcon, CheckCircle2, ShieldXIcon, CameraIcon, UserCheckIcon, ProcessingSpinner, UserIcon } from '../icons';
 import { User } from '../../types';
 import geminiService from '../../services/geminiService';
 
@@ -22,8 +22,6 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
   const [failureReason, setFailureReason] = useState<string>('');
   const [verificationMessage, setVerificationMessage] = useState<string>('');
   const verificationStepIntervalRef = useRef<number | null>(null);
-  const [simulateSuccess, setSimulateSuccess] = useState(true);
-  const [simulatedGender, setSimulatedGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>(user.gender);
 
   useEffect(() => {
     if (isOpen) {
@@ -31,9 +29,6 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
       setError(null);
       setFailureReason('');
       setVerificationMessage('');
-      setSimulateSuccess(true);
-      setSimulatedGender(user.gender);
-
 
       const startCamera = async () => {
         try {
@@ -66,7 +61,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
           window.clearInterval(verificationStepIntervalRef.current);
       }
     };
-  }, [isOpen, user.gender]);
+  }, [isOpen]);
   
   const captureFrame = (): string | null => {
       if (!videoRef.current || !canvasRef.current) return null;
@@ -100,7 +95,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
       return canvas.toDataURL('image/jpeg', 0.8);
   }
 
-  const handleVerify = async () => {
+  const handleVerify = async (isImposterSimulation: boolean) => {
     setStatus('VERIFYING');
 
     const verificationSteps = [ "Capturing Biometrics...", "Analyzing Facial Vectors...", "Finalizing Result..." ];
@@ -115,7 +110,6 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
     
     const liveImage = captureFrame();
 
-    // --- CAMERA BLACKOUT DETECTION ---
     const canvas = canvasRef.current;
     if (canvas && liveImage) {
         const context = canvas.getContext('2d', { willReadFrequently: true });
@@ -124,7 +118,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
             const data = imageData.data;
             let darkPixels = 0;
             const pixelCount = data.length / 4;
-            const sampleRate = 100; // Sample 1% of pixels
+            const sampleRate = 100;
             for (let i = 0; i < data.length; i += 4 * sampleRate) {
                 const r = data[i];
                 const g = data[i + 1];
@@ -135,7 +129,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
             }
             
             const totalSampled = Math.ceil(pixelCount / sampleRate);
-            if (darkPixels / totalSampled > 0.95) { // If > 95% of sampled pixels are dark
+            if (darkPixels / totalSampled > 0.95) {
                 if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
                 const reason = "Verification failed. Camera feed was obscured or unavailable.";
                 setFailureReason(reason);
@@ -145,7 +139,6 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
             }
         }
     }
-    // --- END BLACKOUT DETECTION ---
     
     if (!liveImage) {
         const reason = "Could not capture image from camera.";
@@ -156,7 +149,7 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
     }
     
     try {
-        const result = await geminiService.verifyFaceSimilarity(liveImage, user.faceReferenceImages || [], null, user, simulateSuccess, simulatedGender);
+        const result = await geminiService.verifyFaceSimilarity(liveImage, user.faceReferenceImages || [], null, user, isImposterSimulation);
         
         if (verificationStepIntervalRef.current) window.clearInterval(verificationStepIntervalRef.current);
         
@@ -223,32 +216,17 @@ const ReVerificationModal: React.FC<ReVerificationModalProps> = ({ isOpen, user,
                                 <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover transform -scale-x-100"></video>
                             )}
                         </div>
-
-                         <div className="mt-4 grid grid-cols-2 gap-4 items-center">
-                            <div className="flex flex-col items-center">
-                                <label htmlFor="reverifySimulateToggle" className="text-sm text-gray-400 cursor-pointer mb-1">I am the legitimate user</label>
-                                <div className="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" id="reverifySimulateToggle" className="sr-only peer" checked={simulateSuccess} onChange={() => setSimulateSuccess(!simulateSuccess)} />
-                                    <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
-                                </div>
-                            </div>
-                             <div>
-                                <label htmlFor="reverifySimGender" className="block text-sm text-gray-400 mb-1 text-center">Simulating as:</label>
-                                <select
-                                  id="reverifySimGender" value={simulatedGender} onChange={(e) => setSimulatedGender(e.target.value as 'MALE' | 'FEMALE' | 'OTHER')}
-                                  className="block w-full bg-gray-700/50 border border-gray-600 rounded-md shadow-sm py-1 px-2 text-sm text-white focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
-                                >
-                                  <option value="MALE">Male</option>
-                                  <option value="FEMALE">Female</option>
-                                  <option value="OTHER">Other</option>
-                                </select>
-                            </div>
-                        </div>
                         
-                        <button onClick={handleVerify} disabled={!!error || !stream} className="mt-4 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed">
-                            <CameraIcon className="mr-2 w-5 h-5" />
-                            Start Re-verification
-                        </button>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button onClick={() => handleVerify(false)} disabled={!!error || !stream} className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed">
+                                <UserCheckIcon className="mr-2 w-5 h-5" />
+                                Verify My Face
+                            </button>
+                             <button onClick={() => handleVerify(true)} disabled={!!error || !stream} className="w-full inline-flex items-center justify-center px-4 py-3 border border-gray-600 text-base font-medium rounded-md text-orange-300 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 focus:ring-offset-gray-900 disabled:bg-gray-800 disabled:cursor-not-allowed">
+                                <UserIcon className="mr-2 w-5 h-5" />
+                                Simulate Imposter
+                            </button>
+                        </div>
                     </div>
                 </>
             );

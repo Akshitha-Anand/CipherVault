@@ -1,4 +1,3 @@
-
 import { User, Transaction, RiskAnalysisResult, RiskLevel, LocationStatus } from '../types';
 import databaseService from './databaseService';
 
@@ -137,30 +136,45 @@ const geminiService = {
     return { riskScore, analysis, riskLevel };
   },
 
+  analyzeRegistrationFace: async (
+    faceImage: string
+  ): Promise<{ gender: 'MALE' | 'FEMALE' | 'OTHER' }> => {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    // In a real scenario, this would be a sophisticated model.
+    // Here we simulate it by returning a random gender.
+    // A real model would be more accurate.
+    const genders: Array<'MALE' | 'FEMALE'> = ['MALE', 'FEMALE'];
+    const detectedGender = genders[Math.floor(Math.random() * genders.length)];
+    return { gender: detectedGender };
+  },
+  
   verifyFaceSimilarity: async (
     liveImage: string,
     referenceImages: string[],
     transaction: Transaction | null = null,
     user: User,
-    simulateSuccess: boolean,
-    simulatedGender: 'MALE' | 'FEMALE' | 'OTHER'
+    isImposterSimulation: boolean
   ): Promise<{ match: boolean; reason: string }> => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     if (!referenceImages || referenceImages.length === 0) {
-      return { match: false, reason: "No reference images found for this user." };
+      return { match: false; reason: "No reference images found for this user." };
     }
     
-    // 1. GENDER MISMATCH CHECK
-    if (user.gender !== 'OTHER' && simulatedGender !== 'OTHER' && user.gender !== simulatedGender) {
-        return { match: false, reason: `Match failed with 100% certainty. Obvious gender mismatch detected. User profile is ${user.gender}, simulation was ${simulatedGender}.`};
+    // 1. AI-POWERED GENDER CLASSIFICATION (SIMULATED)
+    // The AI first classifies the gender of the live face.
+    const { gender: liveFaceGender } = await geminiService.analyzeRegistrationFace(liveImage);
+
+    // 2. HARD RULE: GENDER MISMATCH CHECK
+    if (user.gender !== 'OTHER' && liveFaceGender !== 'OTHER' && user.gender !== liveFaceGender) {
+        return { match: false, reason: `Match failed with 100% certainty. Obvious gender mismatch detected. User profile is ${user.gender}, but live face was classified as ${liveFaceGender}.`};
     }
 
-    // 2. Determine base similarity threshold (0.0 to 1.0 scale)
+    // 3. Determine base similarity threshold (0.0 to 1.0 scale)
     let requiredSimilarity = 0.90;
     let reasonForThreshold = `Base threshold: ${requiredSimilarity.toFixed(2)}.`;
 
-    // 3. Adjust threshold based on transaction risk
+    // 4. Adjust threshold based on transaction risk
     if (transaction?.riskLevel === RiskLevel.High) {
       requiredSimilarity = 0.95;
       reasonForThreshold = `High-Risk Transaction threshold: ${requiredSimilarity.toFixed(2)}.`;
@@ -169,7 +183,7 @@ const geminiService = {
       reasonForThreshold = `Medium-Risk Transaction threshold: ${requiredSimilarity.toFixed(2)}.`;
     }
 
-    // 4. Adjust threshold for new users
+    // 5. Adjust threshold for new users
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     if (new Date(user.createdAt) > oneWeekAgo) {
       requiredSimilarity += 0.015;
@@ -177,23 +191,23 @@ const geminiService = {
     }
     requiredSimilarity = Math.min(0.99, requiredSimilarity); // Cap it
 
-    // 5. Simulate a deterministic vector-based comparison
+    // 6. Simulate a deterministic vector-based comparison
     const referenceVectors = referenceImages.map(() => createFaceVector());
     let liveVector;
     
-    if (simulateSuccess) {
-        // GUARANTEED SUCCESS: Simulate a live vector that is very similar to a reference vector.
+    if (!isImposterSimulation) {
+        // GUARANTEED SUCCESS (LEGITIMATE USER): Simulate a live vector that is very similar to a reference vector.
         const referenceToMatch = referenceVectors[0];
-        liveVector = referenceToMatch.map(val => val + (Math.random() - 0.5) * 0.1); // Add tiny noise
+        liveVector = referenceToMatch.map(val => val + (Math.random() - 0.5) * 0.1); // Add tiny noise for realism
     } else {
-        // GUARANTEED FAILURE: Simulate a completely different face vector.
+        // GUARANTEED FAILURE (IMPOSTER): Simulate a completely different face vector.
         liveVector = createFaceVector();
     }
     
     const similarities = referenceVectors.map(refVec => calculateCosineSimilarity(liveVector, refVec));
     const bestSimilarity = Math.max(...similarities);
 
-    // 6. Determine match and create final reason string
+    // 7. Determine match and create final reason string
     const match = bestSimilarity >= requiredSimilarity;
     let reason = '';
     if (match) {

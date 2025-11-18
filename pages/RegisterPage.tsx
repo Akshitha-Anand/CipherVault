@@ -18,16 +18,16 @@ enum RegisterStep {
 
 export default function RegisterPage({ onRegisterSuccess, onSwitchToLogin }: RegisterPageProps) {
   const [step, setStep] = useState<RegisterStep>(RegisterStep.Personal);
-  const [personalDetails, setPersonalDetails] = useState<Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string } | null>(null);
+  const [personalDetails, setPersonalDetails] = useState<Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt' | 'gender'> & { password: string } | null>(null);
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
+  const [aiDetectedGender, setAiDetectedGender] = useState<'MALE' | 'FEMALE' | 'OTHER' | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handlePersonalSubmit = async (details: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string }) => {
+  const handlePersonalSubmit = async (details: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt' | 'gender'> & { password: string }) => {
     setApiError(null);
     setIsLoading(true);
     try {
-        // Use the mock database service
         const { exists } = await databaseService.checkEmail(details.email);
         if (exists) {
             setApiError('This email address is already registered.');
@@ -47,12 +47,13 @@ export default function RegisterPage({ onRegisterSuccess, onSwitchToLogin }: Reg
     setStep(RegisterStep.FaceCapture);
   };
   
-  const handleFaceSubmit = async (faceImages: string[]) => {
+  const handleFaceSubmit = async (faceImages: string[], detectedGender: 'MALE' | 'FEMALE' | 'OTHER') => {
     if (personalDetails && bankDetails) {
+        setAiDetectedGender(detectedGender);
         setIsLoading(true);
         try {
-            // Use the mock database service
-            const user = await databaseService.register({ personalDetails, bankDetails, faceImages });
+            const finalPersonalDetails = { ...personalDetails, gender: detectedGender };
+            const user = await databaseService.register({ personalDetails: finalPersonalDetails, bankDetails, faceImages });
             onRegisterSuccess(user);
         } catch (error) {
              if (error instanceof Error) {

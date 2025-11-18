@@ -56,6 +56,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
   const debouncedAmount = useDebounce(amount, 300);
   
   const [location, setLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const [locationName, setLocationName] = useState<string | undefined>(undefined);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('PENDING');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [totals, setTotals] = useState({ daily: 0, weekly: 0 });
@@ -78,17 +79,33 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
         setTotals({ daily: 0, weekly: 0 }); // No limits for NEFT/RTGS
     }
   }, [user.id]);
+  
+   const getGeocode = async (lat: number, lon: number) => {
+      try {
+          // Using a free, public reverse geocoding service for demonstration
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+          const data = await response.json();
+          if (data && data.address) {
+              const { city, state, country } = data.address;
+              return [city, state, country].filter(Boolean).join(', ');
+          }
+          return 'Unknown Location';
+      } catch (error) {
+          console.error("Geocoding failed:", error);
+          return 'Location lookup failed';
+      }
+  };
 
   useEffect(() => {
     fetchTransactionTotals(type);
 
     setLocationStatus('PENDING');
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocation({ latitude, longitude });
+        const name = await getGeocode(latitude, longitude);
+        setLocationName(name);
         setLocationStatus('SUCCESS');
       },
       (err) => {
@@ -161,6 +178,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
         amount: numericAmount,
         type,
         location,
+        locationName,
         time: new Date().toISOString()
     };
 
@@ -172,7 +190,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
 
     await proceedWithAnalysis(pendingTransaction);
 
-  }, [recipient, location, user, type, locationStatus, proceedWithAnalysis]);
+  }, [recipient, location, locationName, user, type, locationStatus, proceedWithAnalysis]);
   
   useEffect(() => {
       handleAnalysis(debouncedAmount);
@@ -393,7 +411,13 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
                        </div>
                        <div className="bg-gray-900/40 p-4 rounded-lg min-h-[150px]">
                            <h3 className="font-semibold text-cyan-300 mb-2">AI Analysis Log</h3>
-                           {processState === ProcessState.Analyzing && <div className="text-gray-400 animate-pulse">Analyzing transaction...</div>}
+                           {processState === ProcessState.Analyzing && 
+                                <div className="text-gray-400 animate-pulse">
+                                  <p>Analyzing transaction...</p>
+                                  <p className="text-xs mt-1">Time: {new Date().toLocaleTimeString()}</p>
+                                  <p className="text-xs">Location: {locationName || 'Fetching...'}</p>
+                                </div>
+                           }
                            <ul className="space-y-1 text-sm text-gray-300">
                               {analysisResult?.analysis.map((log, index) => (
                                   <li key={index} className="flex items-start">
