@@ -1,3 +1,4 @@
+
 import { User, Transaction, RiskAnalysisResult, RiskLevel, LocationStatus } from '../types';
 import databaseService from './databaseService';
 
@@ -141,10 +142,9 @@ const geminiService = {
   ): Promise<{ gender: 'MALE' | 'FEMALE' | 'OTHER' }> => {
     await new Promise(resolve => setTimeout(resolve, 1000));
     // In a real scenario, this would be a sophisticated model.
-    // Here we simulate it by returning a random gender.
-    // A real model would be more accurate.
+    // Here we simulate it semi-deterministically based on image data length for consistency.
     const genders: Array<'MALE' | 'FEMALE'> = ['MALE', 'FEMALE'];
-    const detectedGender = genders[Math.floor(Math.random() * genders.length)];
+    const detectedGender = genders[faceImage.length % 2];
     return { gender: detectedGender };
   },
   
@@ -157,17 +157,27 @@ const geminiService = {
   ): Promise<{ match: boolean; reason: string }> => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    if (!referenceImages || referenceImages.length === 0) {
-      return { match: false; reason: "No reference images found for this user." };
+    // The reference vectors are now stored with the user object
+    const referenceVectors = user.faceReferenceVectors;
+
+    if (!referenceVectors || referenceVectors.length === 0) {
+      return { match: false; reason: "No reference face vectors found for this user." };
     }
     
-    // 1. AI-POWERED GENDER CLASSIFICATION (SIMULATED)
-    // The AI first classifies the gender of the live face.
-    const { gender: liveFaceGender } = await geminiService.analyzeRegistrationFace(liveImage);
+    // 1. AI-POWERED GENDER CLASSIFICATION (SIMULATED & DETERMINISTIC)
+    let liveFaceGender: 'MALE' | 'FEMALE' | 'OTHER';
+    if (!isImposterSimulation) {
+      // For a legitimate user, the detected gender must match their profile to ensure the check passes reliably.
+      liveFaceGender = user.gender;
+    } else {
+      // For an imposter, run the "AI" analysis. It might fail here, or at the vector stage.
+      const { gender } = await geminiService.analyzeRegistrationFace(liveImage);
+      liveFaceGender = gender;
+    }
 
     // 2. HARD RULE: GENDER MISMATCH CHECK
     if (user.gender !== 'OTHER' && liveFaceGender !== 'OTHER' && user.gender !== liveFaceGender) {
-        return { match: false, reason: `Match failed with 100% certainty. Obvious gender mismatch detected. User profile is ${user.gender}, but live face was classified as ${liveFaceGender}.`};
+        return { match: false, reason: `TRANSACTION BLOCKED. Identity check failed with 100% certainty due to a gender mismatch. The system detected a ${liveFaceGender} face, but the account profile is registered as ${user.gender}.`};
     }
 
     // 3. Determine base similarity threshold (0.0 to 1.0 scale)
@@ -192,13 +202,12 @@ const geminiService = {
     requiredSimilarity = Math.min(0.99, requiredSimilarity); // Cap it
 
     // 6. Simulate a deterministic vector-based comparison
-    const referenceVectors = referenceImages.map(() => createFaceVector());
     let liveVector;
     
     if (!isImposterSimulation) {
-        // GUARANTEED SUCCESS (LEGITIMATE USER): Simulate a live vector that is very similar to a reference vector.
-        const referenceToMatch = referenceVectors[0];
-        liveVector = referenceToMatch.map(val => val + (Math.random() - 0.5) * 0.1); // Add tiny noise for realism
+        // GUARANTEED SUCCESS (LEGITIMATE USER): Simulate a live vector that is very similar to one of the STORED reference vectors.
+        const referenceToMatch = referenceVectors[0]; // Match against the first stored vector
+        liveVector = referenceToMatch.map(val => val + (Math.random() - 0.5) * 0.2); // Add tiny noise for realism
     } else {
         // GUARANTEED FAILURE (IMPOSTER): Simulate a completely different face vector.
         liveVector = createFaceVector();
@@ -211,9 +220,9 @@ const geminiService = {
     const match = bestSimilarity >= requiredSimilarity;
     let reason = '';
     if (match) {
-        reason = `Match successful. Best vector similarity of ${bestSimilarity.toFixed(3)} (from ${referenceImages.length} images) met the required threshold of ${requiredSimilarity.toFixed(2)}. ${reasonForThreshold}`;
+        reason = `Match successful. Best vector similarity of ${bestSimilarity.toFixed(3)} (from ${referenceVectors.length} reference vectors) met the required threshold of ${requiredSimilarity.toFixed(2)}. ${reasonForThreshold}`;
     } else {
-        reason = `Match failed. Best vector similarity of ${bestSimilarity.toFixed(3)} (from ${referenceImages.length} images) did not meet the required threshold of ${requiredSimilarity.toFixed(2)}. ${reasonForThreshold}`;
+        reason = `TRANSACTION BLOCKED. Face match failed. Best vector similarity of ${bestSimilarity.toFixed(3)} (from ${referenceVectors.length} reference vectors) did not meet the required threshold of ${requiredSimilarity.toFixed(2)}. ${reasonForThreshold}`;
     }
     
     return { match, reason };

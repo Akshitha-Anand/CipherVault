@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Transaction, User } from '../../types';
+import { Transaction, StoredUser } from '../../types';
 import databaseService from '../../services/databaseService';
 import { UserIcon, ActivityIcon, CheckCircle2, ShieldAlertIcon } from '../icons';
 
@@ -16,14 +16,14 @@ const DetailRow: React.FC<{ label: string; value: React.ReactNode; }> = ({ label
 );
 
 const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ transaction, onClose }) => {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<StoredUser | null>(null);
     const [userHistory, setUserHistory] = useState<Transaction[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const [fetchedUser, history] = await Promise.all([
-                    databaseService.getUser(transaction.userId),
+                    databaseService.getStoredUser(transaction.userId),
                     databaseService.getUserTransactions(transaction.userId)
                 ]);
                 setUser(fetchedUser);
@@ -59,8 +59,8 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({ transac
                         <div>
                             <h3 className="text-lg font-semibold text-cyan-300 mb-2 flex items-center gap-2"><UserIcon /> User Details</h3>
                              <div className="bg-gray-900/50 p-4 rounded-lg space-y-3">
-                                <DetailRow label="Name" value={user?.name || 'Loading...'} />
-                                <DetailRow label="Email" value={user?.email || 'Loading...'} />
+                                <DetailRow label="Name" value={transaction.userName} />
+                                <DetailRow label="User ID" value={transaction.userId} />
                                 <DetailRow label="Account Status" value={user?.status.replace('_', ' ') || 'Loading...'} />
                             </div>
                         </div>

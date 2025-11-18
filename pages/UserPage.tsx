@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, AccountHealthStats, Transaction, UserAnalyticsData } from '../types';
 import UserDashboard from '../components/UserDashboard';
@@ -15,9 +14,9 @@ export default function UserPage({ user: initialUser }: UserPageProps) {
 
   const fetchAllUserData = useCallback(async (user: User) => {
     try {
-        const [transactions, updatedUser, stabilityScoreData, analytics] = await Promise.all([
+        const [transactions, updatedStoredUser, stabilityScoreData, analytics] = await Promise.all([
             databaseService.getUserTransactions(user.id),
-            databaseService.getUser(user.id),
+            databaseService.getStoredUser(user.id),
             databaseService.getAccountStabilityScore(user.id),
             databaseService.getUserAnalytics(user.id)
         ]);
@@ -33,10 +32,17 @@ export default function UserPage({ user: initialUser }: UserPageProps) {
             return acc;
         }, { low: 0, medium: 0, high: 0 });
 
-        setCurrentUser(updatedUser || user);
+        if (updatedStoredUser) {
+          // Keep the decrypted PII from the current session, but update non-sensitive fields
+          setCurrentUser(prevUser => ({
+            ...prevUser,
+            status: updatedStoredUser.status,
+            adminNotes: updatedStoredUser.adminNotes,
+          }));
+        }
 
         setAccountHealth({
-          status: updatedUser?.status === 'ACTIVE' ? 'Stable' : (updatedUser?.status === 'UNDER_REVIEW' ? 'Under Review' : 'At Risk'),
+          status: updatedStoredUser?.status === 'ACTIVE' ? 'Stable' : (updatedStoredUser?.status === 'UNDER_REVIEW' ? 'Under Review' : 'At Risk'),
           totalTransactions: transactions.length,
           monthlySpending,
           riskBreakdown,

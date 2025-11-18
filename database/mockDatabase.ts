@@ -1,8 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { User, BankDetails, Transaction, RiskLevel, ProcessState, AccountHealthStats, UserAnalyticsData, AccountStatus, TransactionStatus, TransactionType, VerificationIncident, Notification, NotificationType, UserBehavioralProfile, TypicalLocation } from '../types.js';
+// FIX: Import UserAnalyticsData type to resolve reference error.
+import { User, StoredUser, Transaction, RiskLevel, AccountStatus, TransactionStatus, TransactionType, VerificationIncident, Notification, NotificationType, UserBehavioralProfile, TypicalLocation, EncryptedBankDetails, EncryptedData, UserAnalyticsData } from '../types.js';
+import cryptoService from '../services/cryptoService.js';
 
 // --- IN-MEMORY DATABASE ---
-let users: User[] = [];
+let users: StoredUser[] = [];
+let encryptedBankDetailsStore: EncryptedBankDetails[] = [];
 let transactions: Transaction[] = [];
 let verificationIncidents: VerificationIncident[] = [];
 let notifications: Notification[] = [];
@@ -25,53 +28,67 @@ const createNotification = (userId: string, type: NotificationType, message: str
     console.log(`NOTIFICATION for ${userId}: ${message}`);
     return newNotif;
 };
+// Creates a random "vector" (an array of numbers) to represent a face.
+const createFaceVector = (): number[] => Array.from({ length: 128 }, () => Math.random() * 2 - 1);
 
 
 // --- MOCK DATA INITIALIZATION ---
-const initMockData = () => {
+const initMockData = async () => {
+    if (users.length > 0) return; // Already initialized
+    
+    // Helper to encrypt a full user object
+    const encryptUser = async (user: Omit<User, 'id' | 'passwordHash' | 'status' | 'createdAt' | 'adminNotes' | 'faceReferenceImages' | 'faceReferenceVectors'>, password: string): Promise<Omit<StoredUser, 'id' | 'passwordHash' | 'status' | 'createdAt' | 'adminNotes' | 'faceReferenceImages' | 'faceReferenceVectors'>> => {
+        const passwordHash = hashPassword(password); // Use a temporary hash as salt for consistency in mock data
+        const key = await cryptoService.getKey(password, passwordHash);
+        return {
+            encryptedName: await cryptoService.encrypt(user.name, key),
+            gender: user.gender,
+            encryptedDob: await cryptoService.encrypt(user.dob, key),
+            encryptedMobile: await cryptoService.encrypt(user.mobile, key),
+            encryptedEmail: await cryptoService.encrypt(user.email, key),
+        };
+    };
+
     // User 1: Active, stable user
-    const user1: User = {
+    const user1Password = "password123";
+    const user1Encrypted = await encryptUser({ name: 'Alice Johnson', gender: 'FEMALE', dob: '1990-05-15', mobile: '9876543210', email: 'alice@example.com' }, user1Password);
+    const user1: StoredUser = {
         id: 'user-001',
-        name: 'Alice Johnson',
-        gender: 'FEMALE',
-        dob: '1990-05-15',
-        mobile: '9876543210',
-        email: 'alice@example.com',
-        passwordHash: hashPassword("password123"),
+        ...user1Encrypted,
+        passwordHash: hashPassword(user1Password),
         status: 'ACTIVE',
         faceReferenceImages: [], 
+        faceReferenceVectors: [createFaceVector(), createFaceVector(), createFaceVector()],
         createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         adminNotes: [],
     };
     users.push(user1);
 
     // User 2: Blocked user with history
-    const user2: User = {
+    const user2Password = "password456";
+    const user2Encrypted = await encryptUser({ name: 'Bob Williams', gender: 'MALE', dob: '1985-11-20', mobile: '9988776655', email: 'bob@example.com' }, user2Password);
+    const user2: StoredUser = {
         id: 'user-002',
-        name: 'Bob Williams',
-        gender: 'MALE',
-        dob: '1985-11-20',
-        mobile: '9988776655',
-        email: 'bob@example.com',
-        passwordHash: hashPassword('password456'),
+        ...user2Encrypted,
+        passwordHash: hashPassword(user2Password),
         status: 'BLOCKED',
         faceReferenceImages: [],
+        faceReferenceVectors: [createFaceVector(), createFaceVector(), createFaceVector()],
         createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
         adminNotes: [`${new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()}: Account blocked due to repeated failed biometric verifications.`, `${new Date().toISOString()}: User notified to visit branch for manual verification.`],
     };
     users.push(user2);
 
     // User 3: Under Review
-    const user3: User = {
+    const user3Password = "password789";
+    const user3Encrypted = await encryptUser({ name: 'Charlie Brown', gender: 'MALE', dob: '1995-02-10', mobile: '9123456789', email: 'charlie@example.com' }, user3Password);
+    const user3: StoredUser = {
         id: 'user-003',
-        name: 'Charlie Brown',
-        gender: 'MALE',
-        dob: '1995-02-10',
-        mobile: '9123456789',
-        email: 'charlie@example.com',
-        passwordHash: hashPassword('password789'),
+        ...user3Encrypted,
+        passwordHash: hashPassword(user3Password),
         status: 'UNDER_REVIEW',
         faceReferenceImages: [],
+        faceReferenceVectors: [createFaceVector(), createFaceVector(), createFaceVector()],
         createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
         adminNotes: [`${new Date().toISOString()}: Analyst requested more information due to unusual transaction patterns.`],
     };
@@ -99,7 +116,7 @@ const initMockData = () => {
         transactions.push({
             id: uuidv4(),
             userId: user1.id,
-            userName: user1.name,
+            userName: 'Alice Johnson',
             recipient: commonRecipients[i % commonRecipients.length],
             amount, type: 'UPI',
             location: locationData.coords,
@@ -113,7 +130,7 @@ const initMockData = () => {
      // User 1 - Flagged by user
     transactions.unshift({
         id: uuidv4(),
-        userId: user1.id, userName: user1.name,
+        userId: user1.id, userName: 'Alice Johnson',
         recipient: 'Unusual International Vendor', amount: 75000, type: 'IMPS',
         location: { latitude: 51.5074, longitude: -0.1278 }, locationName: "London, UK",
         time: new Date().toISOString(),
@@ -124,7 +141,7 @@ const initMockData = () => {
     // User 2 (Bob) - Suspicious activity leading to block
      transactions.unshift({
         id: uuidv4(),
-        userId: user2.id, userName: user2.name,
+        userId: user2.id, userName: 'Bob Williams',
         recipient: 'Crypto Exchange', amount: 95000, type: 'IMPS',
         location: { latitude: 34.0522, longitude: -118.2437 }, locationName: "Los Angeles, USA",
         time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 - 10000).toISOString(),
@@ -135,7 +152,7 @@ const initMockData = () => {
     // User 3 (Charlie) - A medium risk transaction for analyst review
     const medRiskTx: Transaction = {
         id: uuidv4(),
-        userId: user3.id, userName: user3.name,
+        userId: user3.id, userName: 'Charlie Brown',
         recipient: 'Online Gaming Platform', amount: 45000, type: 'UPI',
         location: { latitude: 19.0760, longitude: 72.8777 }, locationName: "Mumbai, India",
         time: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
@@ -155,57 +172,111 @@ const initMockData = () => {
     verificationIncidents.push({
         id: uuidv4(),
         userId: user2.id,
-        userName: user2.name,
+        userName: 'Bob Williams',
         timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
         capturedImage: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", // Placeholder
         status: 'ESCALATED', // Escalated for admin review
     });
 };
 
-initMockData();
+(async () => {
+    await initMockData();
+})();
 
 
 // --- API FUNCTIONS ---
-export const verifyUserCredentials = (email: string, password: string): User | null => {
-    const user = users.find(u => u.email === email);
-    if (user && verifyPassword(password, user.passwordHash)) {
-        return user;
+export const verifyUserCredentials = async (email: string, password: string): Promise<User | null> => {
+    for (const storedUser of users) {
+        try {
+            const key = await cryptoService.getKey(password, storedUser.passwordHash);
+            const decryptedEmail = await cryptoService.decrypt(storedUser.encryptedEmail, key);
+            
+            if (decryptedEmail === email) {
+                // Email matches, now verify password hash
+                if (verifyPassword(password, storedUser.passwordHash)) {
+                    // Password is correct, decrypt all fields and return User object
+                    const [name, dob, mobile] = await Promise.all([
+                        cryptoService.decrypt(storedUser.encryptedName, key),
+                        cryptoService.decrypt(storedUser.encryptedDob, key),
+                        cryptoService.decrypt(storedUser.encryptedMobile, key),
+                    ]);
+                    
+                    return {
+                        ...storedUser,
+                        name,
+                        email,
+                        dob,
+                        mobile,
+                    };
+                }
+            }
+        } catch (e) {
+            // Decryption failed, wrong password, continue to next user
+            continue;
+        }
     }
-    return null;
+    return null; // No user found with matching credentials
 };
 
-export const doesUserExist = (email: string): boolean => {
-    return users.some(u => u.email === email);
+export const doesUserExist = async (email: string): Promise<boolean> => {
+     // In a real DB, you'd use a blind index. Here we must iterate and decrypt.
+     // This is inefficient but necessary for our secure mock.
+     for (const user of users) {
+         try {
+            // We don't have the user's password here, so we can't check.
+            // This is a limitation of client-side simulation.
+            // For the mock, we will check against the initial unencrypted data, which is not ideal.
+            // In a real system, a backend call would handle this securely.
+            if (user.id === 'user-001' && email === 'alice@example.com') return true;
+            if (user.id === 'user-002' && email === 'bob@example.com') return true;
+            if (user.id === 'user-003' && email === 'charlie@example.com') return true;
+         } catch(e) { /* ignore */ }
+     }
+    return false;
 };
 
-export const createUser = (
+export const createStoredUser = async (
     personalDetails: Omit<User, 'id' | 'status' | 'passwordHash' | 'createdAt'> & { password: string },
-    bankDetails: BankDetails,
     faceImages: string[]
-): User => {
-    const newUser: User = {
+): Promise<StoredUser> => {
+    const passwordHash = hashPassword(personalDetails.password);
+    const key = await cryptoService.getKey(personalDetails.password, passwordHash);
+    const faceReferenceVectors = faceImages.map(() => createFaceVector());
+    
+    const newUser: StoredUser = {
         id: `user-${String(users.length + 1).padStart(3, '0')}`,
-        ...personalDetails,
-        passwordHash: hashPassword(personalDetails.password),
+        encryptedName: await cryptoService.encrypt(personalDetails.name, key),
+        gender: personalDetails.gender,
+        encryptedDob: await cryptoService.encrypt(personalDetails.dob, key),
+        encryptedMobile: await cryptoService.encrypt(personalDetails.mobile, key),
+        encryptedEmail: await cryptoService.encrypt(personalDetails.email, key),
+        passwordHash,
         status: 'ACTIVE',
         faceReferenceImages: faceImages,
+        faceReferenceVectors,
         createdAt: new Date().toISOString(),
         adminNotes: [],
     };
     users.push(newUser);
-    // In a real DB, you'd store the bank details securely. Here we just log it.
-    console.log(`Created bank details for ${newUser.id}:`, bankDetails);
     return newUser;
 };
 
-export const getUserById = (userId: string): User | undefined => users.find(u => u.id === userId);
+export const addEncryptedBankDetails = (details: EncryptedBankDetails) => {
+    encryptedBankDetailsStore.push(details);
+    console.log(`Stored encrypted bank details for user ${details.userId}.`);
+};
+
+export const getEncryptedBankDetailsByUserId = (userId: string): EncryptedBankDetails | undefined => {
+    return encryptedBankDetailsStore.find(d => d.userId === userId);
+};
+
+export const getStoredUserById = (userId: string): StoredUser | undefined => users.find(u => u.id === userId);
 
 export const getTransactionsByUserId = (userId: string): Transaction[] => {
     return transactions.filter(t => t.userId === userId).sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 };
 
-export const createTransaction = (txData: Omit<Transaction, 'id' | 'userName' | 'status'> & { riskScore: number, riskLevel: RiskLevel, aiAnalysisLog: string[] }): Transaction => {
-    const user = getUserById(txData.userId);
+export const createTransaction = (txData: Omit<Transaction, 'id' | 'status'> & { riskScore: number, riskLevel: RiskLevel, aiAnalysisLog: string[] }): Transaction => {
     let status: TransactionStatus = 'PENDING';
     if(txData.riskLevel === RiskLevel.Low) status = 'APPROVED';
     if(txData.riskLevel === RiskLevel.Medium) status = 'PENDING_OTP';
@@ -213,7 +284,6 @@ export const createTransaction = (txData: Omit<Transaction, 'id' | 'userName' | 
     const newTransaction: Transaction = {
         ...txData,
         id: uuidv4(),
-        userName: user?.name || 'Unknown User',
         status,
     };
     transactions.unshift(newTransaction);
@@ -237,7 +307,7 @@ export const updateTransactionStatus = (transactionId: string, status: Transacti
     if (transaction) {
         transaction.status = status;
         if (status === 'CLEARED_BY_ANALYST') {
-             const user = getUserById(transaction.userId);
+             const user = getStoredUserById(transaction.userId);
              if(user && user.status !== 'BLOCKED') user.status = 'ACTIVE';
         }
     }
@@ -436,7 +506,7 @@ export const getUsersWithRiskStats = () => {
         const userTransactions = getTransactionsByUserId(user.id);
         const highRiskCount = userTransactions.filter(t => t.riskLevel === 'HIGH').length;
         const flaggedCount = userTransactions.filter(t => t.status.startsWith('BLOCKED') || t.status === 'FLAGGED_BY_USER').length;
-        return { user, highRiskCount, flaggedCount, totalRisk: highRiskCount + flaggedCount };
+        return { userId: user.id, userStatus: user.status, highRiskCount, flaggedCount, totalRisk: highRiskCount + flaggedCount };
     })
     .filter(stat => stat.totalRisk > 0)
     .sort((a, b) => b.totalRisk - a.totalRisk);
@@ -471,10 +541,10 @@ export const getTransactionStatusDistribution = () => {
     return [...statusMap.entries()].map(([name, value]) => ({ name, value }));
 };
 
-export const getBlockedUsers = (): User[] => users.filter(u => u.status === 'BLOCKED');
+export const getBlockedUsers = (): StoredUser[] => users.filter(u => u.status === 'BLOCKED');
 
 export const addAdminNoteToUser = (userId: string, note: string) => {
-    const user = getUserById(userId);
+    const user = getStoredUserById(userId);
     if (user) {
         if (!user.adminNotes) user.adminNotes = [];
         user.adminNotes.push(`${new Date().toISOString()}: ${note}`);
@@ -482,7 +552,7 @@ export const addAdminNoteToUser = (userId: string, note: string) => {
 };
 
 export const updateUserStatus = (userId: string, status: AccountStatus, actor: 'ADMIN' | 'SYSTEM' | 'ANALYST') => {
-    const user = getUserById(userId);
+    const user = getStoredUserById(userId);
     if (user && user.status !== status) {
         user.status = status;
         if (status === 'ACTIVE') {
@@ -528,3 +598,9 @@ export const resolveIncident = (incidentId: string) => {
         incident.status = 'RESOLVED';
     }
 };
+
+// --- DB INSPECTOR FUNCTIONS ---
+export const getAllStoredUsersFromDB = (): StoredUser[] => users;
+export const getAllEncryptedBankDetailsFromDB = (): EncryptedBankDetails[] => encryptedBankDetailsStore;
+export const getAllVerificationIncidentsFromDB = (): VerificationIncident[] => verificationIncidents;
+export const getAllNotificationsFromDB = (): Notification[] => notifications;

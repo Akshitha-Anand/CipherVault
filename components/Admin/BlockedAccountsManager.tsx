@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import databaseService from '../../services/databaseService';
-import { User } from '../../types';
+import { StoredUser } from '../../types';
 import { ShieldAlertIcon, UserCheckIcon, SendIcon, XIcon, InfoIcon, MessageSquareIcon } from '../icons';
 
 type Toast = {
@@ -12,12 +11,12 @@ type Toast = {
 
 type NoteModalState = {
     isOpen: boolean;
-    user: User | null;
+    user: StoredUser | null;
     mode: 'reactivate' | 'add';
 };
 
 const BlockedAccountsManager: React.FC = () => {
-    const [blockedUsers, setBlockedUsers] = useState<User[]>([]);
+    const [blockedUsers, setBlockedUsers] = useState<StoredUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [noteModal, setNoteModal] = useState<NoteModalState>({ isOpen: false, user: null, mode: 'add' });
     const [noteContent, setNoteContent] = useState('');
@@ -46,7 +45,7 @@ const BlockedAccountsManager: React.FC = () => {
         }, 4000);
     };
 
-    const openNoteModal = (user: User, mode: 'reactivate' | 'add') => {
+    const openNoteModal = (user: StoredUser, mode: 'reactivate' | 'add') => {
         setNoteModal({ isOpen: true, user, mode });
         setNoteContent('');
     };
@@ -66,19 +65,19 @@ const BlockedAccountsManager: React.FC = () => {
 
         if (noteModal.mode === 'reactivate') {
             await databaseService.updateUserStatus(noteModal.user.id, 'ACTIVE');
-            showToast(`User ${noteModal.user.name} has been re-activated.`, 'success');
+            showToast(`User ${noteModal.user.id} has been re-activated.`, 'success');
         } else {
-            showToast(`Note added to ${noteModal.user.name}'s account.`, 'success');
+            showToast(`Note added to ${noteModal.user.id}'s account.`, 'success');
         }
         
         closeNoteModal();
         fetchBlockedUsers();
     };
     
-    const handleNotify = async (user: User) => {
+    const handleNotify = async (user: StoredUser) => {
         const note = 'Admin kept account blocked and sent notification to user to visit the nearest branch for verification.';
         await databaseService.addAdminNote(user.id, note);
-        showToast(`A notification has been simulated for ${user.name}.`, 'info');
+        showToast(`A notification has been simulated for ${user.id}.`, 'info');
         fetchBlockedUsers();
     };
 
@@ -98,8 +97,7 @@ const BlockedAccountsManager: React.FC = () => {
                         {blockedUsers.map(user => (
                             <div key={user.id} className="bg-gray-900/50 p-3 rounded-lg flex flex-wrap items-center justify-between gap-4">
                                 <div>
-                                    <p className="font-semibold text-white">{user.name}</p>
-                                    <p className="text-xs text-gray-500">{user.email}</p>
+                                    <p className="font-semibold text-white font-mono">{user.id}</p>
                                     <p className="text-xs text-gray-400 mt-1 italic">
                                         <span className="text-gray-500">Last note:</span> {user.adminNotes?.[user.adminNotes.length - 1]?.split(': ')[1] || 'No notes'}
                                     </p>
@@ -124,7 +122,7 @@ const BlockedAccountsManager: React.FC = () => {
                                         className="px-3 py-1 text-xs font-semibold rounded-md bg-green-600/50 text-green-300 hover:bg-green-600/80 flex items-center gap-1.5 transition-colors"
                                     >
                                         <UserCheckIcon className="w-4 h-4" />
-                                        Re-activate...
+                                        Re-activate
                                     </button>
                                 </div>
                             </div>
@@ -132,63 +130,62 @@ const BlockedAccountsManager: React.FC = () => {
                     </div>
                 )}
             </div>
-
+            
+            {/* Toasts */}
+            <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-3">
+                {toasts.map(toast => (
+                    <div key={toast.id} className={`flex items-center gap-3 p-3 rounded-lg border text-sm shadow-lg animate-fade-in-up ${
+                        toast.type === 'success'
+                        ? 'bg-green-900/80 border-green-700 text-green-200'
+                        : 'bg-blue-900/80 border-blue-700 text-blue-200'
+                    }`}>
+                        {toast.type === 'success' ? <UserCheckIcon className="w-5 h-5" /> : <InfoIcon className="w-5 h-5" />}
+                        <span>{toast.message}</span>
+                    </div>
+                ))}
+            </div>
+            
+            {/* Note Modal */}
             {noteModal.isOpen && noteModal.user && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-                    <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-8 max-w-md w-full">
-                        <div className="text-left">
-                            <h2 className="text-2xl font-bold text-cyan-300">
-                                {noteModal.mode === 'reactivate' ? 'Re-activate Account' : 'Add Note'}
+                    <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-6 max-w-md w-full">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold text-cyan-300">
+                                {noteModal.mode === 'reactivate' ? 'Re-activate Account' : 'Add Admin Note'}
                             </h2>
-                            <p className="text-gray-400 mt-1">
-                                For user: <span className="font-semibold text-white">{noteModal.user.name}</span>
-                            </p>
-                             <p className="text-gray-300 mt-4 mb-2 text-sm font-medium">
-                                {noteModal.mode === 'reactivate' ? 'Please provide a reason for re-activation:' : 'Enter your note below:'}
-                            </p>
-                            <textarea
-                                value={noteContent}
-                                onChange={(e) => setNoteContent(e.target.value)}
-                                rows={4}
-                                className="w-full bg-gray-900/50 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500"
-                                placeholder="E.g., User verified identity via video call..."
-                            />
+                            <button onClick={closeNoteModal} className="text-gray-400 hover:text-white">
+                                <XIcon className="w-5 h-5" />
+                            </button>
                         </div>
-                        <div className="mt-6 flex justify-end gap-4">
-                            <button onClick={closeNoteModal} className="px-6 py-2 font-semibold rounded-md bg-gray-600 hover:bg-gray-500 text-white transition-colors">
+                        <p className="text-sm text-gray-400 mb-4">
+                           For user: <span className="font-mono text-white">{noteModal.user.id}</span>.
+                           {noteModal.mode === 'reactivate' && " A note is required to re-activate this account."}
+                        </p>
+                        <textarea
+                            value={noteContent}
+                            onChange={(e) => setNoteContent(e.target.value)}
+                            rows={4}
+                            className="w-full bg-gray-900/50 border border-gray-600 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            placeholder="Enter note here..."
+                        />
+                        <div className="mt-4 flex justify-end gap-3">
+                            <button onClick={closeNoteModal} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500 transition-colors">
                                 Cancel
                             </button>
-                            <button 
-                                onClick={handleNoteSubmit} 
-                                disabled={!noteContent.trim()}
-                                className={`px-6 py-2 font-semibold rounded-md text-white transition-colors flex items-center gap-2 ${
-                                    noteModal.mode === 'reactivate' 
-                                    ? 'bg-green-600 hover:bg-green-700' 
-                                    : 'bg-cyan-600 hover:bg-cyan-700'
-                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            <button
+                                onClick={handleNoteSubmit}
+                                className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                                    noteModal.mode === 'reactivate'
+                                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                                    : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                                }`}
                             >
-                                {noteModal.mode === 'reactivate' ? <><UserCheckIcon className="w-5 h-5" /> Confirm & Re-activate</> : <><MessageSquareIcon className="w-5 h-5" /> Save Note</>}
+                                {noteModal.mode === 'reactivate' ? 'Re-activate & Save' : 'Save Note'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-
-            <div className="fixed bottom-4 right-4 z-50 w-full max-w-xs space-y-3">
-                {toasts.map(toast => (
-                    <div key={toast.id} className={`flex items-start justify-between gap-4 p-4 rounded-lg shadow-lg border animate-fade-in-up ${
-                        toast.type === 'success' ? 'bg-green-900/80 backdrop-blur-sm border-green-600' : 'bg-blue-900/80 backdrop-blur-sm border-blue-600'
-                    }`}>
-                        <div className="flex items-center gap-3">
-                            {toast.type === 'success' ? <UserCheckIcon className="w-6 h-6 text-green-300" /> : <InfoIcon className="w-6 h-6 text-blue-300" />}
-                            <p className="text-sm text-gray-200">{toast.message}</p>
-                        </div>
-                        <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-gray-400 hover:text-white">
-                           <XIcon className="w-5 h-5" />
-                        </button>
-                    </div>
-                ))}
-            </div>
         </>
     );
 };

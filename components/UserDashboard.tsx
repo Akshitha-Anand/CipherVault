@@ -133,6 +133,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, accountHealth, anal
       const analysis = await geminiService.analyzeTransaction(transactionDetails, user, locationStatus);
       const resultTransaction = await databaseService.createTransaction({
         ...transactionDetails,
+        // FIX: Add the required 'userName' property to the transaction details.
+        userName: user.name,
         riskScore: analysis.riskScore,
         riskLevel: analysis.riskLevel,
         aiAnalysisLog: analysis.analysis,

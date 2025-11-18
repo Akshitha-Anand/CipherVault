@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import databaseService from '../../services/databaseService';
-import { User } from '../../types';
+import { AccountStatus } from '../../types';
 import { ShieldAlertIcon } from '../icons';
 
 interface UserRiskStat {
-    user: User;
+    userId: string;
+    userStatus: AccountStatus;
     highRiskCount: number;
     flaggedCount: number;
 }
@@ -38,16 +39,16 @@ const TopAtRiskAccounts: React.FC = () => {
                  <div className="text-gray-400 text-center py-4">No accounts currently show high-risk patterns.</div>
             ) : (
                 <div className="space-y-4">
-                    {users.map(({ user, highRiskCount, flaggedCount }) => (
-                        <div key={user.id} className="bg-gray-900/50 p-3 rounded-md">
+                    {users.map((stat) => (
+                        <div key={stat.userId} className="bg-gray-900/50 p-3 rounded-md">
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <p className="font-semibold text-white">{user.name}</p>
-                                    <p className="text-xs text-gray-500">{user.email}</p>
+                                    <p className="font-semibold text-white font-mono text-sm">{stat.userId}</p>
+                                    <p className="text-xs text-gray-500">Status: {stat.userStatus.replace('_', ' ')}</p>
                                 </div>
                                 <div className="text-right text-xs space-y-1">
-                                    <p><span className="font-bold text-orange-400">{highRiskCount}</span> high-risk txns</p>
-                                    <p><span className="font-bold text-red-400">{flaggedCount}</span> flagged/blocked</p>
+                                    <p><span className="font-bold text-orange-400">{stat.highRiskCount}</span> high-risk txns</p>
+                                    <p><span className="font-bold text-red-400">{stat.flaggedCount}</span> flagged/blocked</p>
                                 </div>
                             </div>
                         </div>

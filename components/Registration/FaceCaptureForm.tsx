@@ -94,7 +94,8 @@ const FaceCaptureForm: React.FC<FaceCaptureFormProps> = ({ onSubmit, isLoading }
             alert(`You can only upload ${remainingSlots} more image(s).`);
         }
         
-        files.slice(0, remainingSlots).forEach(file => {
+        // FIX: Explicitly type `file` as `File` to resolve a TypeScript inference issue where the type was `unknown`.
+        files.slice(0, remainingSlots).forEach((file: File) => {
             const reader = new FileReader();
             reader.onloadend = () => {
                 if (typeof reader.result === 'string') {

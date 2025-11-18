@@ -2,6 +2,7 @@ export type Role = 'USER' | 'ADMIN' | 'ANALYST';
 
 export type AccountStatus = 'ACTIVE' | 'BLOCKED' | 'UNDER_REVIEW';
 
+// Represents the decrypted user object for an active session
 export interface User {
   id: string;
   name: string;
@@ -12,6 +13,7 @@ export interface User {
   passwordHash: string;
   status: AccountStatus;
   faceReferenceImages?: string[]; // Array of Base64 encoded images
+  faceReferenceVectors?: number[][]; // Array of 128-dimension vectors
   createdAt: string;
   adminNotes?: string[];
 }
@@ -31,7 +33,24 @@ export interface EncryptedData {
   ciphertext: string; // Base64 encoded ciphertext
 }
 
-// Represents how data is stored in the "database"
+// Represents how user data is stored in the "database"
+export interface StoredUser {
+  id: string;
+  encryptedName: EncryptedData;
+  gender: 'MALE' | 'FEMALE' | 'OTHER';
+  encryptedDob: EncryptedData;
+  encryptedMobile: EncryptedData;
+  encryptedEmail: EncryptedData;
+  passwordHash: string;
+  status: AccountStatus;
+  faceReferenceImages?: string[];
+  faceReferenceVectors?: number[][]; // Array of 128-dimension vectors
+  createdAt: string;
+  adminNotes?: string[];
+}
+
+
+// Represents how bank data is stored in the "database"
 export interface EncryptedBankDetails {
   userId: string;
   encryptedBankName: EncryptedData;
